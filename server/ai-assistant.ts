@@ -14,7 +14,7 @@ interface ConversationContext {
 
 interface AIResponse {
   message: string;
-  intent: "booking" | "inquiry" | "faq" | "general" | "unknown";
+  intent: "booking" | "reschedule" | "cancel" | "inquiry" | "faq" | "general" | "unknown";
   sentiment: "positive" | "neutral" | "negative" | "unknown";
   requiresEscalation: boolean;
   extractedEntities: {
@@ -24,6 +24,7 @@ interface AIResponse {
     service?: string;
     date?: string;
     time?: string;
+    appointmentId?: string;
   };
 }
 
@@ -85,7 +86,7 @@ function buildSystemPrompt(settings: SettingsWithWorkingHours): string {
 Your role is to:
 1. Greet customers warmly and professionally
 2. Answer questions about services, hours, and general information
-3. Help customers book appointments
+3. Help customers book, reschedule, or cancel appointments
 4. Collect necessary information (name, email, phone, preferred service, date/time)
 5. Detect customer sentiment and urgency
 6. Escalate complex issues to human staff when needed
@@ -100,7 +101,7 @@ ${settings.welcomeMessage ? `- Custom Welcome: ${settings.welcomeMessage}` : ""}
 IMPORTANT: You must ALWAYS respond in valid JSON format with this structure:
 {
   "message": "Your conversational response to the customer",
-  "intent": "booking" | "inquiry" | "faq" | "general" | "unknown",
+  "intent": "booking" | "reschedule" | "cancel" | "inquiry" | "faq" | "general" | "unknown",
   "sentiment": "positive" | "neutral" | "negative" | "unknown",
   "requiresEscalation": boolean,
   "extractedEntities": {
@@ -109,21 +110,32 @@ IMPORTANT: You must ALWAYS respond in valid JSON format with this structure:
     "phone": "customer phone if mentioned",
     "service": "requested service if mentioned (must match one from: ${services})",
     "date": "requested date if mentioned (YYYY-MM-DD format)",
-    "time": "requested time if mentioned (HH:MM format in 24-hour)"
+    "time": "requested time if mentioned (HH:MM format in 24-hour)",
+    "appointmentId": "appointment ID if customer mentions an existing appointment (extract from conversation)"
   }
 }
 
 Guidelines:
 - Be warm, professional, and helpful
 - If booking an appointment, collect: name, service, date, time (email/phone optional but helpful)
-- Detect intent: "booking" for appointments, "inquiry" for questions about services, "faq" for general questions, "general" for chitchat
+- Detect intent:
+  * "booking" - customer wants to schedule a NEW appointment
+  * "reschedule" - customer wants to CHANGE an existing appointment to a different date/time
+  * "cancel" - customer wants to CANCEL an existing appointment
+  * "inquiry" - questions about services
+  * "faq" - general questions
+  * "general" - chitchat
+- For reschedule/cancel requests:
+  * Ask for identifying information (name, email, phone, or appointment ID)
+  * Confirm the action before executing
+  * Extract new date/time if rescheduling
 - Assess sentiment: positive (grateful, happy), neutral (factual), or negative (frustrated, angry)
 - Set requiresEscalation to true if: customer is angry, request is complex, or you can't help
 - Extract entities mentioned in the conversation - be sure to capture all details
 - Keep responses concise but informative (2-3 sentences max)
 - If customer asks about availability, suggest times within working hours
 - When you have enough info for booking (name, service, date, time), confirm all details clearly
-- Only mark intent as "booking" when customer explicitly wants to book/schedule something
+- For modifications, help identify the correct appointment by asking for name/email/phone
 - Always respond in JSON format as specified above`;
 }
 

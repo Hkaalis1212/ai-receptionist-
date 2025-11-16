@@ -86,8 +86,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       conversation = await storage.updateConversation(conversation.id, updates);
 
-      // If we have enough info for a booking, create the appointment
+      // Handle appointment intents
       const entities = aiResponse.extractedEntities;
+      
+      // Handle booking - create new appointment
       if (
         aiResponse.intent === "booking" &&
         entities.name &&
@@ -112,6 +114,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateConversation(conversation!.id, {
           status: "completed",
         });
+      }
+      
+      // Handle reschedule - update existing appointment
+      if (aiResponse.intent === "reschedule" && entities.name) {
+        // Find customer's appointment by name/email/phone
+        const appointments = await storage.getAllAppointments();
+        const customerAppointment = appointments.find(apt => 
+          apt.status !== "cancelled" && apt.status !== "completed" &&
+          (apt.customerName.toLowerCase() === entities.name?.toLowerCase() ||
+           (entities.email && apt.customerEmail?.toLowerCase() === entities.email.toLowerCase()) ||
+           (entities.phone && apt.customerPhone === entities.phone))
+        );
+
+        if (customerAppointment && entities.date && entities.time) {
+          await storage.updateAppointment(customerAppointment.id, {
+            date: entities.date,
+            time: entities.time,
+            service: entities.service || customerAppointment.service,
+          });
+          
+          // Send update notification
+          sendAppointmentConfirmationSms(customerAppointment).catch(err => {
+            console.error("Failed to send reschedule SMS:", err);
+          });
+        }
+      }
+      
+      // Handle cancel - cancel existing appointment
+      if (aiResponse.intent === "cancel" && entities.name) {
+        // Find customer's appointment by name/email/phone
+        const appointments = await storage.getAllAppointments();
+        const customerAppointment = appointments.find(apt => 
+          apt.status !== "cancelled" && apt.status !== "completed" &&
+          (apt.customerName.toLowerCase() === entities.name?.toLowerCase() ||
+           (entities.email && apt.customerEmail?.toLowerCase() === entities.email.toLowerCase()) ||
+           (entities.phone && apt.customerPhone === entities.phone))
+        );
+
+        if (customerAppointment) {
+          await storage.updateAppointment(customerAppointment.id, {
+            status: "cancelled",
+          });
+          
+          // Send cancellation notification
+          if (customerAppointment.customerPhone) {
+            const twilioClient = getTwilioClient();
+            const fromNumber = await getTwilioFromPhoneNumber();
+            
+            if (twilioClient && fromNumber) {
+              const client = await twilioClient;
+              client.messages.create({
+                body: `Your appointment for ${customerAppointment.service} on ${customerAppointment.date} at ${customerAppointment.time} has been cancelled. Contact us if you'd like to reschedule.`,
+                to: customerAppointment.customerPhone,
+                from: fromNumber,
+              }).catch((err: any) => {
+                console.error("Failed to send cancellation SMS:", err);
+              });
+            }
+          }
+        }
       }
 
       res.json({
@@ -154,6 +216,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get appointments error:", error);
       res.status(500).json({ error: "Failed to fetch appointments" });
+    }
+  });
+
+  // GET /api/appointments/:id - Get single appointment
+  app.get("/api/appointments/:id", async (req, res) => {
+    try {
+      const appointment = await storage.getAppointment(req.params.id);
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+      res.json(appointment);
+    } catch (error) {
+      console.error("Get appointment error:", error);
+      res.status(500).json({ error: "Failed to fetch appointment" });
+    }
+  });
+
+  // PUT /api/appointments/:id - Update appointment
+  app.put("/api/appointments/:id", async (req, res) => {
+    try {
+      const appointment = await storage.getAppointment(req.params.id);
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+
+      // Validate update data
+      const updateSchema = insertAppointmentSchema.partial();
+      const validatedData = updateSchema.parse(req.body);
+
+      const updated = await storage.updateAppointment(req.params.id, validatedData);
+      
+      if (updated) {
+        // Send SMS notification about the change
+        sendAppointmentConfirmationSms(updated).catch(err => {
+          console.error("Failed to send update SMS:", err);
+        });
+        
+        // Sync to Mailchimp if enabled
+        syncAppointmentCustomer(updated).catch(err => {
+          console.error("Failed to sync updated appointment to Mailchimp:", err);
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Update appointment error:", error);
+      res.status(400).json({ error: "Invalid appointment data" });
+    }
+  });
+
+  // POST /api/appointments/:id/cancel - Cancel appointment
+  app.post("/api/appointments/:id/cancel", async (req, res) => {
+    try {
+      const appointment = await storage.getAppointment(req.params.id);
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+
+      if (appointment.status === "cancelled") {
+        return res.status(400).json({ error: "Appointment is already cancelled" });
+      }
+
+      const updated = await storage.updateAppointment(req.params.id, {
+        status: "cancelled",
+      });
+
+      if (updated && updated.customerPhone) {
+        // Send cancellation SMS
+        const twilioClient = getTwilioClient();
+        const fromNumber = await getTwilioFromPhoneNumber();
+        
+        if (twilioClient && fromNumber) {
+          const client = await twilioClient;
+          client.messages.create({
+            body: `Your appointment for ${updated.service} on ${updated.date} at ${updated.time} has been cancelled. Contact us if you'd like to reschedule.`,
+            to: updated.customerPhone,
+            from: fromNumber,
+          }).catch((err: any) => {
+            console.error("Failed to send cancellation SMS:", err);
+          });
+        }
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Cancel appointment error:", error);
+      res.status(500).json({ error: "Failed to cancel appointment" });
     }
   });
 
@@ -373,6 +522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { MessageSid, From, To, Body } = req.body;
 
+      // Store incoming SMS
       await storage.createSmsMessage({
         twilioMessageSid: MessageSid,
         direction: "inbound",
@@ -382,12 +532,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "received",
       });
 
+      // Find or create conversation for this phone number
+      const conversations = await storage.getAllConversations();
+      let conversation = conversations.find(c => c.customerPhone === From);
+      
+      if (!conversation) {
+        conversation = await storage.createConversation({
+          status: "active",
+          sentiment: "unknown",
+          intent: "unknown",
+          customerPhone: From,
+        });
+      }
+
+      // Get conversation history and settings
+      const messages = await storage.getMessagesByConversation(conversation.id);
+      const settings = await storage.getSettings();
+
+      // Get AI response
+      const aiResponse = await getAIResponse(Body, { messages, settings });
+
+      // Save user message
+      await storage.createMessage({
+        role: "user",
+        content: Body,
+        conversationId: conversation.id,
+      });
+
+      // Save AI message
+      await storage.createMessage({
+        role: "assistant",
+        content: aiResponse.message,
+        conversationId: conversation.id,
+      });
+
+      // Update conversation with extracted information
+      const updates: any = {
+        intent: aiResponse.intent,
+        sentiment: aiResponse.sentiment,
+      };
+
+      if (aiResponse.extractedEntities.name) {
+        updates.customerName = aiResponse.extractedEntities.name;
+      }
+      if (aiResponse.extractedEntities.email) {
+        updates.customerEmail = aiResponse.extractedEntities.email;
+      }
+
+      await storage.updateConversation(conversation.id, updates);
+
+      // Handle appointment actions
+      const entities = aiResponse.extractedEntities;
+      
+      // Handle booking
+      if (
+        aiResponse.intent === "booking" &&
+        entities.name &&
+        entities.service &&
+        entities.date &&
+        entities.time
+      ) {
+        await storage.createAppointment({
+          conversationId: conversation.id,
+          customerName: entities.name,
+          customerEmail: entities.email,
+          customerPhone: From,
+          service: entities.service,
+          date: entities.date,
+          time: entities.time,
+          status: "pending",
+          amountCents: 5000,
+          paymentStatus: "pending",
+          notes: `Booked via SMS`,
+        });
+      }
+
+      // Handle reschedule
+      if (aiResponse.intent === "reschedule" && entities.name) {
+        const appointments = await storage.getAllAppointments();
+        const customerAppointment = appointments.find(apt => 
+          apt.status !== "cancelled" && apt.status !== "completed" &&
+          (apt.customerPhone === From || apt.customerName.toLowerCase() === entities.name?.toLowerCase())
+        );
+
+        if (customerAppointment && entities.date && entities.time) {
+          await storage.updateAppointment(customerAppointment.id, {
+            date: entities.date,
+            time: entities.time,
+            service: entities.service || customerAppointment.service,
+          });
+        }
+      }
+
+      // Handle cancel
+      if (aiResponse.intent === "cancel") {
+        const appointments = await storage.getAllAppointments();
+        const customerAppointment = appointments.find(apt => 
+          apt.status !== "cancelled" && apt.status !== "completed" &&
+          apt.customerPhone === From
+        );
+
+        if (customerAppointment) {
+          await storage.updateAppointment(customerAppointment.id, {
+            status: "cancelled",
+          });
+        }
+      }
+
+      // Send AI response back via TwiML
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>${aiResponse.message}</Message>
+</Response>`;
+
       res.type('text/xml');
-      res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+      res.send(twiml);
     } catch (error) {
       console.error("SMS webhook error:", error);
+      const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>Sorry, we're experiencing technical difficulties. Please try again later or call us.</Message>
+</Response>`;
       res.type('text/xml');
-      res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+      res.send(errorTwiml);
     }
   });
 
@@ -449,7 +716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).send('Forbidden');
       }
 
-      const { CallSid, SpeechResult } = req.body;
+      const { CallSid, SpeechResult, From } = req.body;
 
       let callLog = await storage.getCallLogBySid(CallSid);
       
@@ -467,6 +734,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messages,
         settings,
       });
+
+      // Handle appointment actions via phone call
+      const entities = aiResponse.extractedEntities;
+      
+      // Handle booking
+      if (
+        aiResponse.intent === "booking" &&
+        entities.name &&
+        entities.service &&
+        entities.date &&
+        entities.time
+      ) {
+        await storage.createAppointment({
+          customerName: entities.name,
+          customerEmail: entities.email,
+          customerPhone: From,
+          service: entities.service,
+          date: entities.date,
+          time: entities.time,
+          status: "pending",
+          amountCents: 5000,
+          paymentStatus: "pending",
+          notes: `Booked via phone call`,
+        });
+      }
+
+      // Handle reschedule
+      if (aiResponse.intent === "reschedule" && From) {
+        const appointments = await storage.getAllAppointments();
+        const customerAppointment = appointments.find(apt => 
+          apt.status !== "cancelled" && apt.status !== "completed" &&
+          apt.customerPhone === From
+        );
+
+        if (customerAppointment && entities.date && entities.time) {
+          await storage.updateAppointment(customerAppointment.id, {
+            date: entities.date,
+            time: entities.time,
+            service: entities.service || customerAppointment.service,
+          });
+        }
+      }
+
+      // Handle cancel
+      if (aiResponse.intent === "cancel" && From) {
+        const appointments = await storage.getAllAppointments();
+        const customerAppointment = appointments.find(apt => 
+          apt.status !== "cancelled" && apt.status !== "completed" &&
+          apt.customerPhone === From
+        );
+
+        if (customerAppointment) {
+          await storage.updateAppointment(customerAppointment.id, {
+            status: "cancelled",
+          });
+        }
+      }
 
       const followUp = "Is there anything else I can help you with?";
       const goodbye = "Thank you for calling. Goodbye!";
