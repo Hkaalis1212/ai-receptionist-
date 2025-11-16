@@ -78,6 +78,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Invitation routes (admin only)
+  app.get('/api/invitations', isAuthenticated, requireRole(['admin']), async (req, res) => {
+    try {
+      const invitations = await storage.getAllInvitations();
+      res.json(invitations);
+    } catch (error) {
+      console.error("Error fetching invitations:", error);
+      res.status(500).json({ message: "Failed to fetch invitations" });
+    }
+  });
+
+  app.post('/api/invitations', isAuthenticated, requireRole(['admin']), async (req: any, res) => {
+    try {
+      const { email, role } = req.body;
+
+      if (!email || !role) {
+        return res.status(400).json({ message: "Email and role are required" });
+      }
+
+      if (!['admin', 'staff', 'viewer'].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+
+      // Check subscription limit
+      const subscription = await storage.getSubscription();
+      const userCount = (await storage.getAllUsers()).length;
+      
+      if (subscription && userCount >= subscription.maxTeamMembers) {
+        return res.status(403).json({ 
+          message: "Team member limit reached. Please upgrade your plan.",
+          upgrade: true
+        });
+      }
+
+      // Check if user already exists
+      const users = await storage.getAllUsers();
+      const existingUser = users.find(u => u.email === email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User already exists" });
+      }
+
+      // Check if pending invitation exists
+      const pending = await storage.getPendingInvitations();
+      const existingInvitation = pending.find(i => i.email === email);
+      if (existingInvitation) {
+        return res.status(400).json({ message: "Invitation already sent" });
+      }
+
+      // Generate secure token
+      const token = require('crypto').randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      const invitation = await storage.createInvitation({
+        email,
+        role,
+        invitedBy: req.user.claims.sub,
+        token,
+        expiresAt,
+        status: "pending",
+      });
+
+      res.json(invitation);
+    } catch (error) {
+      console.error("Error creating invitation:", error);
+      res.status(500).json({ message: "Failed to create invitation" });
+    }
+  });
+
+  app.delete('/api/invitations/:id', isAuthenticated, requireRole(['admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteInvitation(id);
+      res.json({ message: "Invitation deleted" });
+    } catch (error) {
+      console.error("Error deleting invitation:", error);
+      res.status(500).json({ message: "Failed to delete invitation" });
+    }
+  });
+
+  // Subscription/billing routes (admin only)
+  app.get('/api/subscription', isAuthenticated, requireRole(['admin']), async (req, res) => {
+    try {
+      const subscription = await storage.getSubscription();
+      const userCount = (await storage.getAllUsers()).length;
+      
+      res.json({
+        ...subscription,
+        currentTeamMembers: userCount,
+      });
+    } catch (error) {
+      console.error("Error fetching subscription:", error);
+      res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+  });
+
+  app.post('/api/subscription/upgrade', isAuthenticated, requireRole(['admin']), async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Stripe not configured" });
+      }
+
+      const { seats } = req.body;
+      
+      if (!seats || seats < 1) {
+        return res.status(400).json({ message: "Invalid seat count" });
+      }
+
+      const subscription = await storage.getSubscription();
+      const currentUsers = (await storage.getAllUsers()).length;
+      const totalSeats = 3 + seats; // Free tier (3) + paid seats
+
+      if (totalSeats < currentUsers) {
+        return res.status(400).json({ 
+          message: `You currently have ${currentUsers} team members. Cannot downgrade below this number.`
+        });
+      }
+
+      // Create or update Stripe subscription
+      // Price: $10/month per additional seat
+      const priceInCents = seats * 1000; // $10 per seat
+
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'Team Member Seats',
+                description: `${seats} additional team member${seats > 1 ? 's' : ''}`,
+              },
+              unit_amount: 1000, // $10 per seat
+              recurring: {
+                interval: 'month',
+              },
+            },
+            quantity: seats,
+          },
+        ],
+        success_url: `${req.headers.origin}/billing?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${req.headers.origin}/billing`,
+        metadata: {
+          organizationId: 'default',
+          seats: seats.toString(),
+        },
+      });
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error creating upgrade session:", error);
+      res.status(500).json({ message: "Failed to create checkout session" });
+    }
+  });
+
   // POST /api/chat - Handle chat messages with AI
   app.post("/api/chat", async (req, res) => {
     try {

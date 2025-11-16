@@ -23,6 +23,10 @@ import {
   type InsertAuditLog,
   type User,
   type UpsertUser,
+  type Invitation,
+  type InsertInvitation,
+  type Subscription,
+  type InsertSubscription,
 } from "@shared/schema";
 
 const client = neon(process.env.DATABASE_URL!);
@@ -85,6 +89,20 @@ export interface IStorage {
   upsertUser(user: UpsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
   updateUserRole(id: string, role: "admin" | "staff" | "viewer"): Promise<User | undefined>;
+
+  // Invitations
+  createInvitation(invitation: InsertInvitation): Promise<Invitation>;
+  getInvitation(id: string): Promise<Invitation | undefined>;
+  getInvitationByToken(token: string): Promise<Invitation | undefined>;
+  getAllInvitations(): Promise<Invitation[]>;
+  getPendingInvitations(): Promise<Invitation[]>;
+  updateInvitation(id: string, updates: Partial<Invitation>): Promise<Invitation | undefined>;
+  deleteInvitation(id: string): Promise<void>;
+
+  // Subscriptions
+  getSubscription(organizationId?: string): Promise<Subscription | undefined>;
+  upsertSubscription(subscription: InsertSubscription): Promise<Subscription>;
+  updateSubscription(id: string, updates: Partial<Subscription>): Promise<Subscription | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -538,6 +556,98 @@ export class DatabaseStorage implements IStorage {
       .where(eq(schema.users.id, id))
       .returning();
     return user;
+  }
+
+  // Invitations
+  async createInvitation(insertInvitation: InsertInvitation): Promise<Invitation> {
+    const [invitation] = await db
+      .insert(schema.invitations)
+      .values(insertInvitation)
+      .returning();
+    return invitation;
+  }
+
+  async getInvitation(id: string): Promise<Invitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(schema.invitations)
+      .where(eq(schema.invitations.id, id));
+    return invitation;
+  }
+
+  async getInvitationByToken(token: string): Promise<Invitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(schema.invitations)
+      .where(eq(schema.invitations.token, token));
+    return invitation;
+  }
+
+  async getAllInvitations(): Promise<Invitation[]> {
+    return await db
+      .select()
+      .from(schema.invitations)
+      .orderBy(desc(schema.invitations.createdAt));
+  }
+
+  async getPendingInvitations(): Promise<Invitation[]> {
+    return await db
+      .select()
+      .from(schema.invitations)
+      .where(eq(schema.invitations.status, "pending"))
+      .orderBy(desc(schema.invitations.createdAt));
+  }
+
+  async updateInvitation(
+    id: string,
+    updates: Partial<Invitation>
+  ): Promise<Invitation | undefined> {
+    const [invitation] = await db
+      .update(schema.invitations)
+      .set(updates)
+      .where(eq(schema.invitations.id, id))
+      .returning();
+    return invitation;
+  }
+
+  async deleteInvitation(id: string): Promise<void> {
+    await db.delete(schema.invitations).where(eq(schema.invitations.id, id));
+  }
+
+  // Subscriptions
+  async getSubscription(organizationId: string = "default"): Promise<Subscription | undefined> {
+    const [subscription] = await db
+      .select()
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.organizationId, organizationId));
+    return subscription;
+  }
+
+  async upsertSubscription(insertSubscription: InsertSubscription): Promise<Subscription> {
+    const [subscription] = await db
+      .insert(schema.subscriptions)
+      .values(insertSubscription)
+      .onConflictDoUpdate({
+        target: schema.subscriptions.organizationId,
+        set: {
+          ...insertSubscription,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return subscription;
+  }
+
+  async updateSubscription(
+    id: string,
+    updates: Partial<Subscription>
+  ): Promise<Subscription | undefined> {
+    const [subscription] = await db
+      .update(schema.subscriptions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.subscriptions.id, id))
+      .returning();
+    return subscription;
   }
 }
 

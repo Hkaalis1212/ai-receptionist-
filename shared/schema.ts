@@ -17,6 +17,8 @@ export const callStatusEnum = pgEnum("call_status", ["initiated", "ringing", "in
 export const knowledgeBaseCategoryEnum = pgEnum("knowledge_base_category", ["hours", "services", "policies", "directions", "pricing", "contact", "general"]);
 export const customerPriorityEnum = pgEnum("customer_priority", ["standard", "vip", "urgent"]);
 export const userRoleEnum = pgEnum("user_role", ["admin", "staff", "viewer"]);
+export const invitationStatusEnum = pgEnum("invitation_status", ["pending", "accepted", "expired", "cancelled"]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "cancelled", "past_due", "trialing"]);
 
 // Session storage table (required for Replit Auth)
 export const sessions = pgTable(
@@ -307,6 +309,54 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
+// Team invitations table
+export const invitations = pgTable("invitations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").notNull(),
+  role: userRoleEnum("role").notNull().default("viewer"),
+  invitedBy: varchar("invited_by").notNull(),
+  status: invitationStatusEnum("status").notNull().default("pending"),
+  token: varchar("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  acceptedAt: timestamp("accepted_at"),
+});
+
+export const insertInvitationSchema = createInsertSchema(invitations).omit({
+  id: true,
+  createdAt: true,
+  acceptedAt: true,
+});
+
+export type Invitation = typeof invitations.$inferSelect;
+export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
+
+// Subscriptions table for billing and team member limits
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").notNull().unique().default("default"),
+  plan: text("plan").notNull().default("free"),
+  status: subscriptionStatusEnum("status").notNull().default("trialing"),
+  maxTeamMembers: integer("max_team_members").notNull().default(3),
+  currentTeamMembers: integer("current_team_members").notNull().default(0),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripePriceId: text("stripe_price_id"),
+  currentPeriodStart: timestamp("current_period_start"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 
 // Helper type for settings with working hours object
 export type SettingsWithWorkingHours = Omit<Settings, 'workingHoursStart' | 'workingHoursEnd'> & {
