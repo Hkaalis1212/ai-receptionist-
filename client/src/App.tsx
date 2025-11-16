@@ -19,8 +19,19 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { MessageSquare, LayoutDashboard, Calendar, Settings, Bot, Phone, Shield } from "lucide-react";
+import { MessageSquare, LayoutDashboard, Calendar, Settings, Bot, Phone, Shield, LogOut, User, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import Chat from "@/pages/chat";
 import Dashboard from "@/pages/dashboard";
 import Appointments from "@/pages/appointments";
@@ -28,6 +39,8 @@ import SettingsPage from "@/pages/settings";
 import Checkout from "@/pages/checkout";
 import Communications from "@/pages/communications";
 import AdminDashboard from "@/pages/admin";
+import Team from "@/pages/team";
+import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
 const navigation = [
@@ -35,36 +48,55 @@ const navigation = [
     title: "Chat",
     url: "/",
     icon: MessageSquare,
+    roles: ["admin", "staff", "viewer"],
   },
   {
     title: "Dashboard",
     url: "/dashboard",
     icon: LayoutDashboard,
+    roles: ["admin", "staff", "viewer"],
   },
   {
     title: "Appointments",
     url: "/appointments",
     icon: Calendar,
+    roles: ["admin", "staff"],
   },
   {
     title: "Communications",
     url: "/communications",
     icon: Phone,
+    roles: ["admin", "staff"],
+  },
+  {
+    title: "Team",
+    url: "/team",
+    icon: Users,
+    roles: ["admin"],
   },
   {
     title: "Admin",
     url: "/admin",
     icon: Shield,
+    roles: ["admin"],
   },
   {
     title: "Settings",
     url: "/settings",
     icon: Settings,
+    roles: ["admin"],
   },
 ];
 
 function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+
+  // Filter navigation based on user role
+  const userRole = user?.role || "viewer";
+  const filteredNavigation = navigation.filter((item) =>
+    item.roles.includes(userRole)
+  );
 
   return (
     <Sidebar>
@@ -84,7 +116,7 @@ function AppSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navigation.map((item) => {
+              {filteredNavigation.map((item) => {
                 const isActive = location === item.url;
                 return (
                   <SidebarMenuItem key={item.title}>
@@ -112,6 +144,12 @@ function AppSidebar() {
 }
 
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading || !isAuthenticated) {
+    return <Landing />;
+  }
+
   return (
     <Switch>
       <Route path="/" component={Chat} />
@@ -119,10 +157,56 @@ function Router() {
       <Route path="/appointments" component={Appointments} />
       <Route path="/communications" component={Communications} />
       <Route path="/checkout" component={Checkout} />
+      <Route path="/team" component={Team} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>
+  );
+}
+
+function UserProfile() {
+  const { user } = useAuth();
+
+  if (!user) return null;
+
+  const initials = [user.firstName, user.lastName]
+    .filter(Boolean)
+    .map((n) => n?.[0])
+    .join("")
+    .toUpperCase() || user.email?.[0]?.toUpperCase() || "U";
+
+  const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "User";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={user.profileImageUrl || undefined} alt={displayName} />
+            <AvatarFallback>{initials}</AvatarFallback>
+          </Avatar>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium" data-testid="text-user-name">{displayName}</span>
+            <span className="text-xs text-muted-foreground" data-testid="text-user-email">{user.email}</span>
+            <span className="text-xs text-muted-foreground capitalize" data-testid="text-user-role">
+              Role: {user.role}
+            </span>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <a href="/api/logout" data-testid="link-logout">
+            <LogOut className="mr-2 h-4 w-4" />
+            Log Out
+          </a>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -136,23 +220,36 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="ai-receptionist-theme">
         <TooltipProvider>
-          <SidebarProvider style={style as React.CSSProperties}>
-            <div className="flex h-screen w-full">
-              <AppSidebar />
-              <div className="flex flex-col flex-1 overflow-hidden">
-                <header className="flex items-center justify-between p-3 border-b border-border bg-background sticky top-0 z-10">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
-                </header>
-                <main className="flex-1 overflow-hidden">
-                  <Router />
-                </main>
-              </div>
-            </div>
-          </SidebarProvider>
+          <AuthenticatedLayout style={style} />
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
+  );
+}
+
+function AuthenticatedLayout({ style }: { style: any }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading || !isAuthenticated) {
+    return <Router />;
+  }
+
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="flex items-center justify-between p-3 border-b border-border bg-background sticky top-0 z-10">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <UserProfile />
+          </header>
+          <main className="flex-1 overflow-hidden">
+            <Router />
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }
 
