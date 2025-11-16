@@ -15,6 +15,7 @@ export const smsStatusEnum = pgEnum("sms_status", ["queued", "sent", "delivered"
 export const callDirectionEnum = pgEnum("call_direction", ["inbound", "outbound"]);
 export const callStatusEnum = pgEnum("call_status", ["initiated", "ringing", "in-progress", "completed", "busy", "failed", "no-answer"]);
 export const knowledgeBaseCategoryEnum = pgEnum("knowledge_base_category", ["hours", "services", "policies", "directions", "pricing", "contact", "general"]);
+export const customerPriorityEnum = pgEnum("customer_priority", ["standard", "vip", "urgent"]);
 
 // Messages table
 export const messages = pgTable("messages", {
