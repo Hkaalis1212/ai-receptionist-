@@ -48,6 +48,7 @@ Preferred communication style: Simple, everyday language.
 - **Appointments Table**: Manages booking data with service, date/time, status (pending/confirmed/cancelled/completed), customer details, payment amount (amountCents), payment status, Stripe payment intent ID, and lastReminderSentAt timestamp for reminder idempotency
 - **SMS Messages Table**: Logs all SMS communications with Twilio message SID, direction (inbound/outbound), from/to numbers, message body, status, and optional appointment/conversation links
 - **Call Logs Table**: Records voice call data including Twilio call SID, direction, from/to numbers, call status, duration, recording URL, transcript, and optional appointment/conversation links
+- **Knowledge Base Table**: Stores FAQ entries with question, answer, category (general, hours, services, policies, directions, pricing, contact), active status, and timestamps for AI to reference when answering customer questions
 - **Settings Table**: Stores business configuration including name, type, business phone, available services, working hours, timezone, welcome message, escalation email, ElevenLabs voice ID for phone calls, Mailchimp audience ID, and Mailchimp sync enable flag (string literal "true"/"false")
 
 **Type Safety**: Full TypeScript integration with Zod schemas for runtime validation using `drizzle-zod` for automatic schema inference.
@@ -83,6 +84,31 @@ Preferred communication style: Simple, everyday language.
 - Path aliases (`@/`, `@shared/`, `@assets/`) for clean imports
 
 ## Recent Changes (November 16, 2025)
+
+### Enhanced AI Features and Knowledge Base System
+
+**Sentiment-Aware Responses:**
+- AI now detects customer sentiment (positive, neutral, negative) and adjusts response tone accordingly
+- Empathetic, apologetic tone for frustrated/angry customers
+- Warm, enthusiastic tone for happy/satisfied customers  
+- Balanced, professional tone for neutral interactions
+- Sentiment detection integrated into all conversation channels (chat, SMS, voice)
+
+**Knowledge Base Management:**
+- Complete FAQ and business information storage system
+- 7 categories: general, hours, services, policies, directions, pricing, contact
+- Full CRUD operations via REST API endpoints (GET, POST, PUT, DELETE /api/knowledge-base)
+- Settings page UI for managing entries with create, edit, delete, and toggle active status
+- AI automatically fetches active knowledge base entries and includes them in system prompt
+- Enables AI to answer common questions accurately using business-specific information
+- Entries can be activated/deactivated without deletion for easy content management
+
+**Call Recording and Transcription:**
+- Programmatic call recording enabled via Twilio REST API
+- Recording URLs automatically captured and stored in call_logs table
+- Transcripts stored alongside recordings for full conversation history
+- Recording status callbacks for reliable URL persistence
+- Supports future playback and analysis features
 
 ### Multi-Channel Appointment Management
 Implemented comprehensive appointment management system with full reschedule and cancel capabilities across all channels:
