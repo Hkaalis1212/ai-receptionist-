@@ -1,0 +1,72 @@
+You are an elite AI Receptionist Architect.  
+Build a market-leading AI receptionist that runs entirely inside one Replit **Paid** workspace and demonstrably outperforms commercial offerings such as Ada, Intercom Resolution Bot, and Amelia.
+
+1. **Non-Functional Targets**  
+   - ≤ 600 ms median response time (text) / ≤ 1.2 s (voice)  
+   - ≥ 97 % intent accuracy on Banking77 + custom hospitality set  
+   - 99.9 % monthly uptime (Replit Autoscale + health ping)  
+   - Support 500 concurrent sessions on 4 vCPU / 8 GB (paid plan limit)
+
+2. **Core Receptionist Competencies**  
+   a. **Multi-Modal Front Door**  
+      - Web chat widget (React embedded)  
+      - Phone call (Twilio Elastic SIP + WebRTC)  
+      - SMS / WhatsApp (Twilio API)  
+   b. **Intelligent Dialogue**  
+      - 12-turn context memory with reference resolution (“move my 3 pm to 4 pm”)  
+      - Dynamic FAQ ingestion from URL or PDF (update without restart)  
+      - Sentiment + urgency classifier → auto-escalate to human  
+   c. **Calendaring & CRM**  
+      - Two-way sync: Google Calendar + Outlook (OAuth2)  
+      - Real-time vacancy check, timezone math, multi-seat booking  
+      - Create / reschedule / cancel + email & SMS confirmations  
+   d. **Voice UX**  
+      - Barge-in, 3-second silence timeout  
+      - Neural TTS (ElevenLabs) + STT (Deepgram) – allow speaker voice clone upload  
+      - DTMF fall-back for IVR paths  
+   e. **Multilingual & Inclusive**  
+      - Live language detection → switch model (EN, ES, FR, DE, PT, JA, ZH)  
+      - Accessibility: WCAG 2.2 AA widget, 1.5× slow voice, keyboard nav  
+   f. **Security & Compliance**  
+      - SOC-2 ready controls: encrypted at rest (Replit AES-256), TLS 1.3, audit log  
+      - GDPR/CCPA erase endpoint (`/forget-user`) within 24 h  
+      - PII redaction before logging (spaCy presidio)
+
+3. **Advanced Differentiators**  
+   - Proactive chit-chat: if wait &gt; 15 s, offer queue position or callback  
+   - Revenue features: up-sell suggestions pulled from Stripe product catalog  
+   - Post-call CSAT micro-survey (1-tap emoji) → auto open ticket if ≤ 3/5  
+   - Live-manager dashboard (Next.js) with:  
+     – Volume, resolution %, top intents, sentiment heat-map  
+     – Whisper mode: manager can coach agent in real-time (WebSocket)  
+   - A/B experiment framework: intents, voices, opening lines (Replit KV store)  
+   - Plug-in SDK: load custom Python/JS actions without restart (dynamic import)
+
+4. **Developer & Deployment Experience**  
+   - One Repl, one click “Run” → autodeploy on push (GitHub sync)  
+   - `pyproject.toml` + `poetry.lock` or `package-lock.json`; uses Replit Postgres & Redis  
+   - Infra-as-code: `replit.nix` + `flake.nix` pinning exact ffmpeg, sox, chromium deps  
+   - Environment generator: `python cli_setup.py` interviews user, writes `.env` & Replit Secrets  
+   - Observability: OpenTelemetry traces → Replit Insights; alerts Slack/Teams webhook  
+   - Test suite:  
+     – Unit (pytest) ≥ 90 % cov  
+     – Load test (Locust) 500 CCU passes &lt;1 % error  
+     – Chaos test: kill 50 % pods → full recovery &lt;30 s  
+   - Docs:  
+     – `ARCHITECTURE.md` (C4 diagram)  
+     – `API.md` (OpenAPI 3.1)  
+     – `DEPLOY.md` (custom domain + Cloudflare proxy)  
+   - Roadmap board (GitHub Projects) with next 90-day features: CRM plug-ins, voice clone marketplace, on-device wake-word
+
+5 **Deliverables**  
+   a. Public Repl URL (Autoscale always-on)  
+   b. 2-min split-screen demo: caller books, cancels, human hand-off, dashboard  
+   c. Benchmark report: accuracy vs. Ada, Intercom, Amelia (side-by-side screenshots)  
+   d. Pricing cheat-sheet: show cost/session at 1 k / 10 k / 100 k monthly sessions (Twilio + ElevenLabs + Replit paid)  
+   e. MIT license + contributor guide (encourage community plug-ins)
+
+Constraints:  
+- Stay within Replit Autoscale paid-tier limits (8 GB RAM, 4 vCPU, 100 GB egress/mo).  
+- External spend only: Twilio, Deepgram, ElevenLabs pay-as-you-go; provide kill-switch.  
+- Keep repo &lt; 1 GB; large models (&gt;500 MB) must be fetched at runtime to cache dir.  
+- No user-side API keys hard-coded; everything via Replit Secrets.
