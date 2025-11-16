@@ -20,11 +20,13 @@ import type { User } from "@shared/schema";
 
 export default function Team() {
   const { toast } = useToast();
-  const { isAuthenticated, isLoading: authLoading, user: currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
 
+  // Only fetch users if user is an admin (ProtectedRoute already verified this)
   const { data: users, isLoading, error } = useQuery<User[]>({
     queryKey: ["/api/users"],
     retry: false,
+    enabled: currentUser?.role === "admin",
   });
 
   const updateRoleMutation = useMutation({
@@ -58,21 +60,7 @@ export default function Team() {
     },
   });
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, authLoading, toast]);
-
-  if (authLoading || isLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <p className="text-muted-foreground">Loading team members...</p>

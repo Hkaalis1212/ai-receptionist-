@@ -33,6 +33,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
+      
+      if (!user) {
+        console.error("User not found in database:", userId);
+        return res.status(401).json({ message: "User not found" });
+      }
+      
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -823,8 +829,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentMinute = now.getMinutes();
       const currentTime = currentHour * 60 + currentMinute;
       
-      const [startHour, startMin] = settings.workingHoursStart.split(":").map(Number);
-      const [endHour, endMin] = settings.workingHoursEnd.split(":").map(Number);
+      const [startHour, startMin] = settings.workingHours.start.split(":").map(Number);
+      const [endHour, endMin] = settings.workingHours.end.split(":").map(Number);
       const startTime = startHour * 60 + startMin;
       const endTime = endHour * 60 + endMin;
       
@@ -870,7 +876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         greeting += settings.customCallScript;
       } else {
         if (!isDuringBusinessHours) {
-          greeting += `We're currently outside our business hours of ${settings.workingHoursStart} to ${settings.workingHoursEnd}. However, our AI assistant is here to help. `;
+          greeting += `We're currently outside our business hours of ${settings.workingHours.start} to ${settings.workingHours.end}. However, our AI assistant is here to help. `;
         }
         greeting += "Please tell us how we can help you today.";
       }

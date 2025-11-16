@@ -32,6 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ProtectedRoute } from "@/components/protected-route";
 import Chat from "@/pages/chat";
 import Dashboard from "@/pages/dashboard";
 import Appointments from "@/pages/appointments";
@@ -90,12 +91,37 @@ const navigation = [
 
 function AppSidebar() {
   const [location] = useLocation();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+
+  // Don't show navigation until user data is loaded
+  if (isLoading || !user) {
+    return (
+      <Sidebar>
+        <SidebarHeader className="border-b border-sidebar-border p-4">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary">
+              <Bot className="h-6 w-6 text-primary-foreground" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-base font-semibold">AI Receptionist</span>
+              <span className="text-xs text-muted-foreground">Loading...</span>
+            </div>
+          </div>
+        </SidebarHeader>
+        <SidebarContent />
+        <SidebarFooter className="border-t border-sidebar-border p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Theme</span>
+            <ThemeToggle />
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+    );
+  }
 
   // Filter navigation based on user role
-  const userRole = user?.role || "viewer";
   const filteredNavigation = navigation.filter((item) =>
-    item.roles.includes(userRole)
+    item.roles.includes(user.role)
   );
 
   return (
@@ -144,22 +170,52 @@ function AppSidebar() {
 }
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
-  if (isLoading || !isAuthenticated) {
+  // Show landing page for unauthenticated users
+  if (!isLoading && !isAuthenticated) {
     return <Landing />;
+  }
+
+  // Show loading skeleton while auth is resolving
+  if (isLoading || !user) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
   }
 
   return (
     <Switch>
       <Route path="/" component={Chat} />
       <Route path="/dashboard" component={Dashboard} />
-      <Route path="/appointments" component={Appointments} />
-      <Route path="/communications" component={Communications} />
+      <Route path="/appointments">
+        <ProtectedRoute allowedRoles={["admin", "staff"]}>
+          <Appointments />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/communications">
+        <ProtectedRoute allowedRoles={["admin", "staff"]}>
+          <Communications />
+        </ProtectedRoute>
+      </Route>
       <Route path="/checkout" component={Checkout} />
-      <Route path="/team" component={Team} />
-      <Route path="/admin" component={AdminDashboard} />
-      <Route path="/settings" component={SettingsPage} />
+      <Route path="/team">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <Team />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <AdminDashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/settings">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <SettingsPage />
+        </ProtectedRoute>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
