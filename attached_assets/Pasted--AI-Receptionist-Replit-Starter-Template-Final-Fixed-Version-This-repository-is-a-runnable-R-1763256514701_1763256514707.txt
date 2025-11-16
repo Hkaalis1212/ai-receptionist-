@@ -1,0 +1,388 @@
+# AI Receptionist — Replit Starter Template (Final Fixed Version)
+
+This repository is a runnable Replit starter template (Express backend + Vite + React frontend). All code has been reviewed and corrected to address the `Unexpected token (1:0)` issue and other common runtime problems.
+
+---
+
+## File tree
+
+```
+AI-Receptionist-Replit-Starter/
+├─ README.md
+├─ package.json
+├─ server/
+│  ├─ package.json
+│  ├─ server.js
+│  ├─ routes.js
+│  └─ test_routes.js
+├─ frontend/
+│  ├─ package.json
+│  ├─ index.html
+│  ├─ vite.config.js
+│  └─ src/
+│     ├─ main.jsx
+│     ├─ App.jsx
+│     ├─ Chat.css
+│     └─ components/
+│        └─ ChatBubble.jsx
+└─ .gitignore
+```
+
+---
+
+## Root package.json
+
+```json
+{
+  "name": "ai-receptionist-starter",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "concurrently \"node server/server.js\" \"cd frontend && npm run dev\"",
+    "start:backend": "node server/server.js",
+    "start:frontend": "cd frontend && npm run dev",
+    "test:backend": "node server/test_routes.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0"
+  }
+}
+```
+
+---
+
+## server/package.json
+
+```json
+{
+  "name": "ai-receptionist-backend",
+  "version": "0.1.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_routes.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "node-fetch": "^2.6.7"
+  }
+}
+```
+
+### server/server.js
+
+```js
+const express = require('express')
+const cors = require('cors')
+const routes = require('./routes')
+const path = require('path')
+const fs = require('fs')
+require('dotenv').config()
+
+const app = express()
+const PORT = process.env.PORT || 3000
+
+app.use(cors())
+app.use(express.json())
+app.use('/api', routes)
+
+const frontBuild = path.join(__dirname, '..', 'frontend', 'dist')
+if (fs.existsSync(frontBuild)) {
+  app.use(express.static(frontBuild))
+  app.get('*', (req, res) => res.sendFile(path.join(frontBuild, 'index.html')))
+} else {
+  app.get('/', (req, res) => res.type('text').send('Frontend not built. Start the dev server or run a build.'))
+}
+
+app.listen(PORT, () => console.log(`Server listening on port ${PORT}`))
+```
+
+### server/routes.js
+
+```js
+const express = require('express')
+const router = express.Router()
+
+const bookings = []
+
+router.post('/message', (req, res) => {
+  const body = req.body || {}
+  const message = typeof body.message === 'string' ? body.message : String(body.message || '')
+  if (!message.trim()) return res.status(400).json({ error: 'No message provided' })
+  const lower = message.toLowerCase()
+  if (lower.includes('book') || lower.includes('appointment') || lower.includes('reserve')) {
+    return res.json({ action: 'REQUEST_MORE_INFO', missing: ['date', 'time', 'name'] })
+  }
+  if (lower.includes('faq') || lower.includes('hours') || lower.includes('price')) {
+    return res.json({ action: 'FAQ', data: { answer: 'Please provide more details or check our FAQ page.' } })
+  }
+  return res.json({ action: 'REPLY', data: { reply: `You said: ${message}` } })
+})
+
+router.post('/book_appointment', (req, res) => {
+  const { service, date, time, name, phone, extra } = req.body || {}
+  if (!service || !date || !time || !name) return res.status(400).json({ error: 'Missing required fields' })
+  const id = bookings.length + 1
+  const booking = { id, service, date, time, name, phone, extra }
+  bookings.push(booking)
+  return res.json({ success: true, booking })
+})
+
+router.post('/hotel_booking', (req, res) => {
+  const { check_in, check_out, guests } = req.body || {}
+  if (!check_in || !check_out || !guests) return res.status(400).json({ error: 'Missing required fields' })
+  return res.json({ success: true, reservation: { id: Date.now(), check_in, check_out, guests } })
+})
+
+router.post('/escalate', (req, res) => {
+  const { reason } = req.body || {}
+  if (!reason) return res.status(400).json({ error: 'Missing reason' })
+  console.log('Escalation:', reason)
+  return res.json({ success: true, message: 'Escalation sent to staff (stubbed)' })
+})
+
+module.exports = router
+```
+
+### server/test_routes.js
+
+```js
+const fetch = require('node-fetch')
+const BASE = process.env.BASE_URL || 'http://localhost:3000'
+
+async function testMessage() {
+  const res = await fetch(`${BASE}/api/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'I want to book an appointment' })
+  })
+  if (!res.ok) throw new Error(`Message endpoint returned ${res.status}`)
+  const data = await res.json()
+  if (data.action !== 'REQUEST_MORE_INFO') throw new Error('testMessage failed')
+  console.log('testMessage -> OK')
+}
+
+async function testBook() {
+  const res = await fetch(`${BASE}/api/book_appointment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ service: 'haircut', date: '2025-12-01', time: '15:00', name: 'Alice' })
+  })
+  if (!res.ok) throw new Error(`Book endpoint returned ${res.status}`)
+  const data = await res.json()
+  if (!data.success) throw new Error('testBook failed')
+  console.log('testBook -> OK')
+}
+
+;(async function run() {
+  try {
+    await testMessage()
+    await testBook()
+    console.log('All backend tests passed')
+    process.exit(0)
+  } catch (err) {
+    console.error('Backend tests failed:', err.message || err)
+    process.exit(1)
+  }
+})()
+```
+
+---
+
+## frontend/package.json
+
+```json
+{
+  "name": "ai-receptionist-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 5173"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "vite": "5.0.0",
+    "@vitejs/plugin-react": "4.0.0"
+  }
+}
+```
+
+### frontend/vite.config.js
+
+```js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()]
+})
+```
+
+### frontend/index.html
+
+```html
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Receptionist — Chat</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+```
+
+### frontend/src/main.jsx
+
+```jsx
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import App from './App'
+import './Chat.css'
+
+createRoot(document.getElementById('root')).render(<App />)
+```
+
+### frontend/src/App.jsx
+
+```jsx
+import React, { useState } from 'react'
+import ChatBubble from './components/ChatBubble'
+
+export default function App() {
+  const [messages, setMessages] = useState([
+    { id: 0, role: 'assistant', text: "Welcome! I'm the AI Receptionist. How can I help you today?" }
+  ])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function sendMessage() {
+    if (!input.trim()) return
+    const userMsg = { id: Date.now(), role: 'user', text: input }
+    setMessages((m) => [...m, userMsg])
+    setLoading(true)
+    setInput('')
+
+    try {
+      const res = await fetch('/api/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMsg.text, sessionId: 'session_1', metadata: { businessType: 'salon' } })
+      })
+      const data = await res.json()
+
+      if (data.action === 'REQUEST_MORE_INFO') {
+        setMessages((m) => [...m, { id: Date.now()+1, role: 'assistant', text: `I need more info: ${data.missing.join(', ')}` }])
+      } else if (data.action === 'FAQ' && data.data) {
+        setMessages((m) => [...m, { id: Date.now()+2, role: 'assistant', text: data.data.answer }])
+      } else if (data.action === 'REPLY' && data.data) {
+        setMessages((m) => [...m, { id: Date.now()+3, role: 'assistant', text: data.data.reply }])
+      } else {
+        setMessages((m) => [...m, { id: Date.now()+4, role: 'assistant', text: JSON.stringify(data) }])
+      }
+    } catch (err) {
+      setMessages((m) => [...m, { id: Date.now()+5, role: 'assistant', text: 'Error contacting backend' }])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="chat-root">
+      <div className="chat-window">
+        {messages.map(msg => <ChatBubble key={msg.id} role={msg.role} text={msg.text} />)}
+      </div>
+
+      <div className="chat-input">
+        <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask me about bookings, availability, or services..." />
+        <button onClick={sendMessage} disabled={loading}>{loading ? '...' : 'Send'}</button>
+      </div>
+    </div>
+  )
+}
+```
+
+### frontend/src/components/ChatBubble.jsx
+
+```jsx
+import React from 'react'
+
+export default function ChatBubble({ role, text }) {
+  return (
+    <div className={`bubble ${role}`}>
+      <div className="bubble-text">{text}</div>
+    </div>
+  )
+}
+```
+
+### frontend/src/Chat.css
+
+```css
+body { font-family: Arial, sans-serif; margin:0; padding:0; }
+.chat-root { display:flex; flex-direction:column; height:100vh; }
+.chat-window { flex:1; overflow:auto; padding:16px; background:#f3f3f3 }
+.chat-input { display:flex; padding:12px; gap:8px; background:#fff; }
+.chat-input input { flex:1; padding:8px 12px; font-size:16px }
+.chat-input button { padding:8px 16px }
+.bubble { margin-bottom:8px; max-width:70%; }
+.bubble.assistant { align-self:flex-start; background:#fff; padding:10px 12px; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.05) }
+.bubble.user { align-self:flex-end; background:#dcf8c6; padding:10px 12px; border-radius:8px }
+```
+
+---
+
+## .gitignore
+
+```
+node_modules/
+.env
+dist/
+```
+
+---
+
+## How to run locally
+
+1. Install root dev tools:
+
+```bash
+npm install
+```
+
+2. Backend:
+
+```bash
+cd server
+npm install
+node server.js
+```
+
+3. Frontend (in separate terminal):
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+4. Run backend smoke tests (optional):
+
+```bash
+cd server
+node test_routes.js
+```
+
+---
+
+If you still see the `index.tsx` error, search for `.tsx` files and either rename them to `.jsx` or request conversion to TypeScript.

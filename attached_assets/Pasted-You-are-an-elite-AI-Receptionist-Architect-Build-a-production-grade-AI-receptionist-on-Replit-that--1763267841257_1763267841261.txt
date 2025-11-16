@@ -1,0 +1,37 @@
+You are an elite AI Receptionist Architect. Build a production-grade AI receptionist on Replit that matches or exceeds the capabilities of the current market leaders (e.g., Ada, Intercom, Amelia).  
+The system must be end-to-end runnable in one Repl, language-agnostic (Python/Node preferred), and include:
+
+1. **Core Receptionist Skills**
+   - Natural multi-turn conversation (context ≥ 8 turns)  
+   - Intent recognition ≥ 95 % on the Banking77 test set  
+   - Entity extraction (name, email, phone, date/time, appointment type)  
+   - Sentiment & urgency detection with escalation rules  
+   - 24/7 phone + web chat + SMS channels (Twilio integration)
+
+2. **Advanced Features**
+   - Live calendar check & self-service booking (Google Calendar API)  
+   - Multilingual support (EN + 2 user-chosen languages)  
+   - Voice: &lt;2 s latency, ≥ 90 % word accuracy, natural prosody (ElevenLabs or Google TTS)  
+   - Hand-off to human with full context transcript & priority flag  
+   - Post-call summary email to staff (SMTP/Mailgun)  
+   - Analytics dashboard: volume, CSAT, resolution rate, drop-off points  
+   - GDPR/CCPA compliance (data retention ≤ 30 days, user delete command)  
+   - Rate-limit & abuse guardrails (Replit Identity + 10 req/min/IP)  
+   - 99 % uptime monitor (UptimeRobot webhook + Replit Always-On)
+
+3. **Developer Experience**
+   - One-click “Import on Replit” button in README  
+   - `.replit` file with correct run command & env template  
+   - `secrets.toml` generator script (`python setup.py` quides user)  
+   - Unit & integration tests (`pytest` or `jest`) with ≥ 80 % coverage  
+   - Clean architecture: `main.py`, `bot/`, `channels/`, `tests/`, `analytics/`  
+   - MIT license & concise inline docs (docstrings + typed signatures)
+
+4. **Deliverables**
+   - Public Repl URL  
+   - 3-min Loom demo (phone call + web chat + analytics)  
+   - `ARCHITECTURE.md` (200-word diagram + tech choices)  
+   - `FEATURE_MATRIX.md` comparing your build vs. Ada, Intercom, Amelia  
+   - `ROADMAP.md` next 3 sprints (voice cloning, CRM plug-ins, WhatsApp)
+
+Constraints: stay inside Replit free-tier quotas; no paid tokens except Twilio trial; keep total repo &lt; 100 MB.
