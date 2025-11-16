@@ -16,19 +16,35 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { type Settings, settingsSchema } from "@shared/schema";
+import { type SettingsWithWorkingHours } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { z } from "zod";
 import { Loader2, Save } from "lucide-react";
+
+const settingsFormSchema = z.object({
+  businessName: z.string().min(1, "Business name is required"),
+  businessType: z.string().min(1, "Business type is required"),
+  availableServices: z.array(z.string()).min(1, "At least one service is required"),
+  workingHours: z.object({
+    start: z.string(),
+    end: z.string(),
+  }),
+  timezone: z.string(),
+  welcomeMessage: z.string().optional(),
+  escalationEmail: z.string().email("Invalid email").or(z.literal("")).optional(),
+});
+
+type SettingsForm = z.infer<typeof settingsFormSchema>;
 
 export default function SettingsPage() {
   const { toast } = useToast();
 
-  const { data: settings, isLoading } = useQuery<Settings>({
+  const { data: settings, isLoading } = useQuery<SettingsWithWorkingHours>({
     queryKey: ["/api/settings"],
   });
 
-  const form = useForm<Settings>({
-    resolver: zodResolver(settingsSchema),
+  const form = useForm<SettingsForm>({
+    resolver: zodResolver(settingsFormSchema),
     values: settings || {
       businessName: "",
       businessType: "",
@@ -41,7 +57,7 @@ export default function SettingsPage() {
   });
 
   const updateSettingsMutation = useMutation({
-    mutationFn: async (data: Settings) => {
+    mutationFn: async (data: SettingsForm) => {
       return await apiRequest("POST", "/api/settings", data);
     },
     onSuccess: () => {
@@ -60,7 +76,7 @@ export default function SettingsPage() {
     },
   });
 
-  const onSubmit = (data: Settings) => {
+  const onSubmit = (data: SettingsForm) => {
     updateSettingsMutation.mutate(data);
   };
 

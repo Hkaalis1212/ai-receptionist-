@@ -2,11 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { getAIResponse } from "./ai-assistant";
-import { 
-  chatRequestSchema, 
-  insertAppointmentSchema,
-  settingsSchema,
-} from "@shared/schema";
+import { chatRequestSchema, insertAppointmentSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/chat - Handle chat messages with AI
@@ -16,7 +12,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { message, conversationId, metadata } = validatedData;
 
       // Get or create conversation
-      let conversation = conversationId 
+      let conversation = conversationId
         ? await storage.getConversation(conversationId)
         : undefined;
 
@@ -162,8 +158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/settings - Update settings
   app.post("/api/settings", async (req, res) => {
     try {
-      const validatedData = settingsSchema.parse(req.body);
-      const settings = await storage.updateSettings(validatedData);
+      const settings = await storage.updateSettings(req.body);
       res.json(settings);
     } catch (error) {
       console.error("Update settings error:", error);

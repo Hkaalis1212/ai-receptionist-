@@ -1,10 +1,17 @@
-import { type Message } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { Bot, User } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
+interface DisplayMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: string;
+  conversationId: string;
+}
+
 interface ChatMessageProps {
-  message: Message;
+  message: DisplayMessage;
 }
 
 export function ChatMessage({ message }: ChatMessageProps) {

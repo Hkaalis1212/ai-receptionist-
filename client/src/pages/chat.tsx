@@ -5,14 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChatMessage } from "@/components/chat-message";
 import { TypingIndicator } from "@/components/typing-indicator";
-import { type Message } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
+
+interface DisplayMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: string;
+  conversationId: string;
+}
 
 export default function Chat() {
   const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<string | undefined>();
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<DisplayMessage[]>([
     {
       id: "welcome",
       role: "assistant",
@@ -34,13 +41,14 @@ export default function Chat() {
 
   const sendMessageMutation = useMutation({
     mutationFn: async (message: string) => {
-      return await apiRequest("POST", "/api/chat", {
+      const response = await apiRequest("POST", "/api/chat", {
         message,
         conversationId,
       });
+      return await response.json();
     },
     onSuccess: (data: any) => {
-      const assistantMessage: Message = {
+      const assistantMessage: DisplayMessage = {
         id: Date.now().toString() + "-assistant",
         role: "assistant",
         content: data.message,
@@ -56,7 +64,7 @@ export default function Chat() {
   const handleSend = async () => {
     if (!input.trim() || sendMessageMutation.isPending) return;
 
-    const userMessage: Message = {
+    const userMessage: DisplayMessage = {
       id: Date.now().toString(),
       role: "user",
       content: input.trim(),

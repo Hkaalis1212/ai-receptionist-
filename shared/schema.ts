@@ -1,58 +1,100 @@
+import { sql } from "drizzle-orm";
+import { pgTable, text, varchar, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Message schema for chat conversations
-export const messageSchema = z.object({
-  id: z.string(),
-  role: z.enum(["user", "assistant", "system"]),
-  content: z.string(),
-  timestamp: z.string(),
-  conversationId: z.string(),
+// Enums
+export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system"]);
+export const conversationStatusEnum = pgEnum("conversation_status", ["active", "completed", "escalated"]);
+export const sentimentEnum = pgEnum("sentiment", ["positive", "neutral", "negative", "unknown"]);
+export const intentEnum = pgEnum("intent", ["booking", "inquiry", "faq", "general", "unknown"]);
+export const appointmentStatusEnum = pgEnum("appointment_status", ["pending", "confirmed", "cancelled", "completed"]);
+
+// Messages table
+export const messages = pgTable("messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  role: messageRoleEnum("role").notNull(),
+  content: text("content").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  conversationId: varchar("conversation_id").notNull(),
 });
 
-export const insertMessageSchema = messageSchema.omit({ id: true, timestamp: true });
+export const insertMessageSchema = createInsertSchema(messages).omit({ 
+  id: true, 
+  timestamp: true 
+});
 
-export type Message = z.infer<typeof messageSchema>;
+export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
-// Conversation schema
-export const conversationSchema = z.object({
-  id: z.string(),
-  startedAt: z.string(),
-  lastMessageAt: z.string(),
-  status: z.enum(["active", "completed", "escalated"]),
-  sentiment: z.enum(["positive", "neutral", "negative", "unknown"]).optional(),
-  intent: z.enum(["booking", "inquiry", "faq", "general", "unknown"]).optional(),
-  customerName: z.string().optional(),
-  customerEmail: z.string().optional(),
-  customerPhone: z.string().optional(),
+// Conversations table
+export const conversations = pgTable("conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  lastMessageAt: timestamp("last_message_at").notNull().defaultNow(),
+  status: conversationStatusEnum("status").notNull().default("active"),
+  sentiment: sentimentEnum("sentiment").default("unknown"),
+  intent: intentEnum("intent").default("unknown"),
+  customerName: text("customer_name"),
+  customerEmail: text("customer_email"),
+  customerPhone: text("customer_phone"),
 });
 
-export const insertConversationSchema = conversationSchema.omit({ id: true, startedAt: true, lastMessageAt: true });
+export const insertConversationSchema = createInsertSchema(conversations).omit({ 
+  id: true, 
+  startedAt: true, 
+  lastMessageAt: true 
+});
 
-export type Conversation = z.infer<typeof conversationSchema>;
+export type Conversation = typeof conversations.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 
-// Appointment schema
-export const appointmentSchema = z.object({
-  id: z.string(),
-  conversationId: z.string().optional(),
-  customerName: z.string(),
-  customerEmail: z.string().optional(),
-  customerPhone: z.string().optional(),
-  service: z.string(),
-  date: z.string(),
-  time: z.string(),
-  status: z.enum(["pending", "confirmed", "cancelled", "completed"]),
-  notes: z.string().optional(),
-  createdAt: z.string(),
+// Appointments table
+export const appointments = pgTable("appointments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id"),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email"),
+  customerPhone: text("customer_phone"),
+  service: text("service").notNull(),
+  date: text("date").notNull(),
+  time: text("time").notNull(),
+  status: appointmentStatusEnum("status").notNull().default("pending"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertAppointmentSchema = appointmentSchema.omit({ id: true, createdAt: true });
+export const insertAppointmentSchema = createInsertSchema(appointments).omit({ 
+  id: true, 
+  createdAt: true 
+});
 
-export type Appointment = z.infer<typeof appointmentSchema>;
+export type Appointment = typeof appointments.$inferSelect;
 export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
 
-// Analytics schema
+// Settings table (singleton)
+export const settings = pgTable("settings", {
+  id: varchar("id").primaryKey().default("default"),
+  businessName: text("business_name").notNull(),
+  businessType: text("business_type").notNull(),
+  availableServices: text("available_services").array().notNull(),
+  workingHoursStart: text("working_hours_start").notNull(),
+  workingHoursEnd: text("working_hours_end").notNull(),
+  timezone: text("timezone").notNull(),
+  welcomeMessage: text("welcome_message"),
+  escalationEmail: text("escalation_email"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSettingsSchema = createInsertSchema(settings).omit({ 
+  id: true, 
+  updatedAt: true 
+});
+
+export type Settings = typeof settings.$inferSelect;
+export type InsertSettings = z.infer<typeof insertSettingsSchema>;
+
+// Analytics schema (computed, not stored)
 export const analyticsSchema = z.object({
   totalConversations: z.number(),
   activeConversations: z.number(),
@@ -78,25 +120,6 @@ export const analyticsSchema = z.object({
 });
 
 export type Analytics = z.infer<typeof analyticsSchema>;
-
-// Settings schema
-export const settingsSchema = z.object({
-  businessName: z.string(),
-  businessType: z.string(),
-  availableServices: z.array(z.string()),
-  workingHours: z.object({
-    start: z.string(),
-    end: z.string(),
-  }),
-  timezone: z.string(),
-  welcomeMessage: z.string().optional(),
-  escalationEmail: z.string().optional(),
-});
-
-export const insertSettingsSchema = settingsSchema;
-
-export type Settings = z.infer<typeof settingsSchema>;
-export type InsertSettings = z.infer<typeof insertSettingsSchema>;
 
 // Chat request/response types
 export const chatRequestSchema = z.object({
@@ -127,3 +150,11 @@ export const chatResponseSchema = z.object({
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 export type ChatResponse = z.infer<typeof chatResponseSchema>;
+
+// Helper type for settings with working hours object
+export type SettingsWithWorkingHours = Omit<Settings, 'workingHoursStart' | 'workingHoursEnd'> & {
+  workingHours: {
+    start: string;
+    end: string;
+  };
+};
