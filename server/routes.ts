@@ -3,6 +3,15 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { getAIResponse } from "./ai-assistant";
 import { chatRequestSchema, insertAppointmentSchema } from "@shared/schema";
+import Stripe from "stripe";
+
+// Initialize Stripe - referenced from blueprint:javascript_stripe
+// Only initialize if the secret key is provided
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2025-10-29.clover",
+    })
+  : null;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/chat - Handle chat messages with AI
@@ -130,6 +139,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get appointments error:", error);
       res.status(500).json({ error: "Failed to fetch appointments" });
+    }
+  });
+
+  // POST /api/create-payment-intent - Create Stripe payment intent for appointment
+  // Referenced from blueprint:javascript_stripe
+  app.post("/api/create-payment-intent", async (req, res) => {
+    try {
+      // Check if Stripe is configured
+      if (!stripe) {
+        return res.status(503).json({ 
+          error: "Stripe payment processing is not configured. Please contact support." 
+        });
+      }
+
+      const { appointmentId, amountCents } = req.body;
+
+      if (!appointmentId || !amountCents) {
+        return res.status(400).json({ error: "Missing appointmentId or amountCents" });
+      }
+
+      // Validate amount is a positive integer
+      if (!Number.isInteger(amountCents) || amountCents <= 0) {
+        return res.status(400).json({ error: "Amount must be a positive integer in cents" });
+      }
+
+      // Create PaymentIntent with Stripe
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amountCents,
+        currency: "usd",
+        metadata: {
+          appointmentId,
+        },
+      });
+
+      // Update appointment with payment intent ID
+      await storage.updateAppointment(appointmentId, {
+        stripePaymentIntentId: paymentIntent.id,
+        amountCents,
+      });
+
+      res.json({ clientSecret: paymentIntent.client_secret });
+    } catch (error: any) {
+      console.error("Create payment intent error:", error);
+      res.status(500).json({ 
+        error: "Error creating payment intent: " + error.message 
+      });
+    }
+  });
+
+  // POST /api/confirm-payment - Update appointment after successful payment
+  app.post("/api/confirm-payment", async (req, res) => {
+    try {
+      const { appointmentId } = req.body;
+
+      if (!appointmentId) {
+        return res.status(400).json({ error: "Missing appointmentId" });
+      }
+
+      // Update appointment payment status
+      const appointment = await storage.updateAppointment(appointmentId, {
+        paymentStatus: "paid",
+        status: "confirmed",
+      });
+
+      res.json(appointment);
+    } catch (error: any) {
+      console.error("Confirm payment error:", error);
+      res.status(500).json({ 
+        error: "Error confirming payment: " + error.message 
+      });
     }
   });
 
