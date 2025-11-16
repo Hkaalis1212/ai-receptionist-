@@ -9,6 +9,8 @@ import { sendAppointmentConfirmationSms } from "./notifications";
 import twilio from "twilio";
 import { z } from "zod";
 import { textToSpeech, getAvailableVoices } from "./elevenlabs-client";
+import { getAudiences, getAudienceStats } from "./mailchimp-client";
+import { syncAppointmentCustomer, syncConversationCustomer } from "./mailchimp-sync";
 
 // Initialize Stripe - referenced from blueprint:javascript_stripe
 // Only initialize if the secret key is provided
@@ -131,6 +133,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertAppointmentSchema.parse(req.body);
       const appointment = await storage.createAppointment(validatedData);
+      
+      // Auto-sync to Mailchimp if enabled
+      syncAppointmentCustomer(appointment).catch(err => {
+        console.error("Failed to sync appointment to Mailchimp:", err);
+      });
+      
       res.json(appointment);
     } catch (error) {
       console.error("Create appointment error:", error);
@@ -225,6 +233,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (appointment) {
         sendAppointmentConfirmationSms(appointment).catch(err => {
           console.error("Failed to send confirmation SMS:", err);
+        });
+        
+        // Auto-sync to Mailchimp on payment confirmation
+        syncAppointmentCustomer(appointment).catch(err => {
+          console.error("Failed to sync appointment to Mailchimp:", err);
         });
       }
 
@@ -557,6 +570,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get voices error:", error);
       res.status(500).json({ error: "Failed to fetch voices" });
+    }
+  });
+
+  // GET /api/mailchimp/audiences - Get Mailchimp audiences/lists
+  app.get("/api/mailchimp/audiences", async (req, res) => {
+    try {
+      const audiences = await getAudiences();
+      res.json(audiences);
+    } catch (error) {
+      console.error("Get Mailchimp audiences error:", error);
+      res.status(500).json({ error: "Failed to fetch audiences" });
+    }
+  });
+
+  // GET /api/mailchimp/stats - Get Mailchimp audience statistics
+  app.get("/api/mailchimp/stats", async (req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      
+      if (!settings.mailchimpAudienceId) {
+        return res.json({ configured: false });
+      }
+
+      const stats = await getAudienceStats(settings.mailchimpAudienceId);
+      res.json({ configured: true, stats });
+    } catch (error) {
+      console.error("Get Mailchimp stats error:", error);
+      res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  // POST /api/mailchimp/sync-appointment - Manually sync an appointment to Mailchimp
+  app.post("/api/mailchimp/sync-appointment", async (req, res) => {
+    try {
+      const { appointmentId } = req.body;
+      
+      if (!appointmentId) {
+        return res.status(400).json({ error: "appointmentId is required" });
+      }
+
+      const appointment = await storage.getAppointment(appointmentId);
+      
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+
+      const result = await syncAppointmentCustomer(appointment);
+      res.json(result);
+    } catch (error) {
+      console.error("Sync appointment error:", error);
+      res.status(500).json({ error: "Failed to sync appointment" });
+    }
+  });
+
+  // POST /api/mailchimp/sync-conversation - Manually sync a conversation to Mailchimp
+  app.post("/api/mailchimp/sync-conversation", async (req, res) => {
+    try {
+      const { conversationId } = req.body;
+      
+      if (!conversationId) {
+        return res.status(400).json({ error: "conversationId is required" });
+      }
+
+      const conversation = await storage.getConversation(conversationId);
+      
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+
+      const result = await syncConversationCustomer(conversation);
+      res.json(result);
+    } catch (error) {
+      console.error("Sync conversation error:", error);
+      res.status(500).json({ error: "Failed to sync conversation" });
     }
   });
 

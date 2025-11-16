@@ -41,6 +41,8 @@ const settingsFormSchema = z.object({
   welcomeMessage: z.string().optional(),
   escalationEmail: z.string().email("Invalid email").or(z.literal("")).optional(),
   elevenLabsVoiceId: z.string().optional(),
+  mailchimpAudienceId: z.string().optional(),
+  mailchimpEnableSync: z.enum(["true", "false"]).optional(),
 });
 
 type SettingsForm = z.infer<typeof settingsFormSchema>;
@@ -56,6 +58,10 @@ export default function SettingsPage() {
     queryKey: ["/api/elevenlabs/voices"],
   });
 
+  const { data: audiences } = useQuery<Array<{ id: string; name: string; memberCount: number }>>({
+    queryKey: ["/api/mailchimp/audiences"],
+  });
+
   const form = useForm<SettingsForm>({
     resolver: zodResolver(settingsFormSchema),
     values: settings ? {
@@ -64,6 +70,8 @@ export default function SettingsPage() {
       welcomeMessage: settings.welcomeMessage || "",
       escalationEmail: settings.escalationEmail || "",
       elevenLabsVoiceId: settings.elevenLabsVoiceId || "",
+      mailchimpAudienceId: settings.mailchimpAudienceId || "",
+      mailchimpEnableSync: settings.mailchimpEnableSync || "false",
     } : {
       businessName: "",
       businessType: "",
@@ -74,6 +82,8 @@ export default function SettingsPage() {
       welcomeMessage: "",
       escalationEmail: "",
       elevenLabsVoiceId: "",
+      mailchimpAudienceId: "",
+      mailchimpEnableSync: "false",
     },
   });
 
@@ -374,6 +384,74 @@ export default function SettingsPage() {
                         </Select>
                         <FormDescription>
                           Choose an ElevenLabs voice for AI phone call responses
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email Marketing</CardTitle>
+                  <CardDescription>
+                    Connect to Mailchimp to automatically add customers to your email list
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="mailchimpAudienceId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Mailchimp Audience (Optional)</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-audience">
+                              <SelectValue placeholder="Select an audience" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {audiences?.map((audience) => (
+                              <SelectItem key={audience.id} value={audience.id}>
+                                {audience.name} ({audience.memberCount} members)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Choose which Mailchimp audience to sync customers to
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="mailchimpEnableSync"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Auto-Sync Customers</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || "false"}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-sync">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="true">Enabled</SelectItem>
+                            <SelectItem value="false">Disabled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Automatically add customers to Mailchimp when they book appointments
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

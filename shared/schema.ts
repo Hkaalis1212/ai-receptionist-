@@ -43,6 +43,8 @@ export const conversations = pgTable("conversations", {
   customerName: text("customer_name"),
   customerEmail: text("customer_email"),
   customerPhone: text("customer_phone"),
+  mailchimpMemberId: text("mailchimp_member_id"),
+  mailchimpSyncedAt: timestamp("mailchimp_synced_at"),
 });
 
 export const insertConversationSchema = createInsertSchema(conversations).omit({ 
@@ -70,6 +72,8 @@ export const appointments = pgTable("appointments", {
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  mailchimpMemberId: text("mailchimp_member_id"),
+  mailchimpSyncedAt: timestamp("mailchimp_synced_at"),
 });
 
 export const insertAppointmentSchema = createInsertSchema(appointments)
@@ -99,6 +103,8 @@ export const settings = pgTable("settings", {
   welcomeMessage: text("welcome_message"),
   escalationEmail: text("escalation_email"),
   elevenLabsVoiceId: text("eleven_labs_voice_id"),
+  mailchimpAudienceId: text("mailchimp_audience_id"),
+  mailchimpEnableSync: text("mailchimp_enable_sync").$type<"true" | "false">().default("false"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
