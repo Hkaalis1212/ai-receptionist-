@@ -15,12 +15,14 @@ The frontend uses React 18 with TypeScript, Vite, and the shadcn/ui component li
 The backend is built with Express.js on Node.js with TypeScript and ESM modules, providing a RESTful API for chat, appointments, analytics, and settings. It integrates with OpenAI GPT-5 for natural language processing, sentiment analysis, and entity extraction, supporting automatic escalation. Development includes Vite middleware for HMR, and production serves static files. All API requests are logged with custom middleware.
 
 ### Data Layer
-Drizzle ORM with Neon Serverless PostgreSQL ensures type-safe database access and schema management. The database schema includes tables for `Messages`, `Conversations`, `Appointments`, `SMS Messages`, `Call Logs`, `Knowledge Base`, and `Settings`. Full TypeScript integration with Zod schemas and `drizzle-zod` provides runtime validation.
+Drizzle ORM with Neon Serverless PostgreSQL ensures type-safe database access and schema management. The database schema includes tables for `Users`, `Sessions`, `Messages`, `Conversations`, `Appointments`, `SMS Messages`, `Call Logs`, `Knowledge Base`, and `Settings`. Full TypeScript integration with Zod schemas and `drizzle-zod` provides runtime validation.
 
 ### UI/UX Decisions
 The design follows system-based principles inspired by modern SaaS platforms, prioritizing clarity and professional aesthetics. The layout is a split-panel with a 16rem fixed sidebar and a fluid main content area, responsive with mobile breakpoints.
 
 ### Technical Implementations
+*   **Multi-User Authentication & RBAC**: Replit Auth integration with Google, GitHub, and email/password providers. Three-tier role system (admin, staff, viewer) with server-side requireRole middleware and client-side ProtectedRoute guards. Session management via PostgreSQL with automatic user provisioning on first login.
+*   **Team Management**: Admin-only interface for viewing all team members and managing role assignments. Real-time role updates with optimistic UI updates and error handling.
 *   **AI Integration**: OpenAI GPT-5 handles natural language understanding, sentiment, and entity extraction.
 *   **Voice Customization**: Supports 8 languages via ElevenLabs and custom call scripts.
 *   **Privacy & Compliance**: Implements call recording disclosure and personalized caller identification.
@@ -36,14 +38,18 @@ The design follows system-based principles inspired by modern SaaS platforms, pr
 *   **Reminder Scheduler**: Automated hourly scheduler for 24-hour appointment reminders with idempotency.
 
 ### Feature Specifications
-*   **Chat**: Real-time customer interaction via AI.
-*   **Appointments**: Scheduling, rescheduling, and cancellation with multi-channel support and notifications.
-*   **Analytics**: Real-time data on conversations, appointments, calls, and revenue.
-*   **Settings**: Configuration for business details, working hours, services, welcome messages, and integrations.
-*   **Knowledge Base**: Centralized management of business FAQs for AI reference.
+*   **Authentication**: Multi-provider login (Google, GitHub, email/password) with role-based access control (admin/staff/viewer).
+*   **Team Management**: Admin-only page for viewing all users and managing role assignments with real-time updates.
+*   **Chat**: Real-time customer interaction via AI (accessible to all authenticated users).
+*   **Appointments**: Scheduling, rescheduling, and cancellation with multi-channel support and notifications (admin and staff access).
+*   **Communications**: SMS and call log management (admin and staff access).
+*   **Analytics**: Real-time data on conversations, appointments, calls, and revenue (accessible to all authenticated users).
+*   **Settings**: Configuration for business details, working hours, services, welcome messages, and integrations (admin-only access).
+*   **Knowledge Base**: Centralized management of business FAQs for AI reference (admin-only access).
 
 ## External Dependencies
 
+*   **Authentication**: Replit Auth with OpenID Connect for Google, GitHub, and email/password authentication. Session storage in PostgreSQL with automatic token refresh.
 *   **AI Service**: OpenAI API (GPT-5 model) for conversational AI, configured via environment variables.
 *   **Payment Processing**: Stripe for secure payments on appointments, configured with API keys.
 *   **Communications**: Twilio for voice calls and SMS messaging, including AI-powered TwiML responses and webhook signature validation.
@@ -56,3 +62,13 @@ The design follows system-based principles inspired by modern SaaS platforms, pr
 *   **Build Tools**: esbuild for server bundling, Vite for frontend bundling, PostCSS.
 *   **Voice Synthesis**: ElevenLabs for natural-sounding multi-language voice support in calls.
 *   **Email Sending**: Resend for transactional email notifications.
+
+## Role-Based Access Control
+
+The application implements a three-tier role system for team collaboration:
+
+*   **Admin**: Full access to all features including team management, settings, knowledge base, appointments, communications, analytics, and chat.
+*   **Staff**: Access to operational features including appointments, communications, analytics, and chat. Cannot modify settings or manage team members.
+*   **Viewer**: Read-only access to analytics, dashboard, and chat. Cannot modify any data or access admin features.
+
+New users are assigned the "viewer" role by default on first login. Admins can update roles via the Team Management page.
