@@ -6,11 +6,13 @@ import { chatRequestSchema, insertAppointmentSchema } from "@shared/schema";
 import Stripe from "stripe";
 import { getTwilioClient, getTwilioFromPhoneNumber } from "./twilio-client";
 import { sendAppointmentConfirmationSms } from "./notifications";
+import { sendAppointmentConfirmationEmail, sendAppointmentCancellationEmail } from "./email-notifications";
 import twilio from "twilio";
 import { z } from "zod";
 import { textToSpeech, getAvailableVoices } from "./elevenlabs-client";
 import { getAudiences, getAudienceStats } from "./mailchimp-client";
 import { syncAppointmentCustomer, syncConversationCustomer } from "./mailchimp-sync";
+import { startReminderScheduler, sendAppointmentReminder } from "./reminder-scheduler";
 
 // Initialize Stripe - referenced from blueprint:javascript_stripe
 // Only initialize if the secret key is provided
@@ -118,7 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Handle reschedule - update existing appointment
       if (aiResponse.intent === "reschedule" && entities.name) {
-        // Find customer's appointment by name/email/phone
+        // Find customer's appointment by name/email/phone (fresh query)
         const appointments = await storage.getAllAppointments();
         const customerAppointment = appointments.find(apt => 
           apt.status !== "cancelled" && apt.status !== "completed" &&
@@ -128,22 +130,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         if (customerAppointment && entities.date && entities.time) {
-          await storage.updateAppointment(customerAppointment.id, {
+          const updated = await storage.updateAppointment(customerAppointment.id, {
             date: entities.date,
             time: entities.time,
             service: entities.service || customerAppointment.service,
           });
           
-          // Send update notification
-          sendAppointmentConfirmationSms(customerAppointment).catch(err => {
-            console.error("Failed to send reschedule SMS:", err);
-          });
+          // Re-fetch to ensure we have latest data
+          const refreshed = await storage.getAppointment(customerAppointment.id);
+          
+          // Send update notifications with the REFRESHED appointment
+          if (refreshed) {
+            sendAppointmentConfirmationSms(refreshed).catch(err => {
+              console.error("Failed to send reschedule SMS:", err);
+            });
+            
+            sendAppointmentConfirmationEmail(refreshed).catch(err => {
+              console.error("Failed to send reschedule email:", err);
+            });
+            
+            syncAppointmentCustomer(refreshed).catch(err => {
+              console.error("Failed to sync rescheduled appointment to Mailchimp:", err);
+            });
+          }
         }
       }
       
       // Handle cancel - cancel existing appointment
       if (aiResponse.intent === "cancel" && entities.name) {
-        // Find customer's appointment by name/email/phone
+        // Find customer's appointment by name/email/phone (fresh query)
         const appointments = await storage.getAllAppointments();
         const customerAppointment = appointments.find(apt => 
           apt.status !== "cancelled" && apt.status !== "completed" &&
@@ -153,25 +168,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         if (customerAppointment) {
-          await storage.updateAppointment(customerAppointment.id, {
+          const cancelled = await storage.updateAppointment(customerAppointment.id, {
             status: "cancelled",
           });
           
-          // Send cancellation notification
-          if (customerAppointment.customerPhone) {
-            const twilioClient = getTwilioClient();
-            const fromNumber = await getTwilioFromPhoneNumber();
-            
-            if (twilioClient && fromNumber) {
-              const client = await twilioClient;
-              client.messages.create({
-                body: `Your appointment for ${customerAppointment.service} on ${customerAppointment.date} at ${customerAppointment.time} has been cancelled. Contact us if you'd like to reschedule.`,
-                to: customerAppointment.customerPhone,
-                from: fromNumber,
-              }).catch((err: any) => {
-                console.error("Failed to send cancellation SMS:", err);
-              });
+          // Re-fetch to ensure we have latest data
+          const refreshed = await storage.getAppointment(customerAppointment.id);
+          
+          // Send cancellation notifications with the REFRESHED appointment
+          if (refreshed) {
+            if (refreshed.customerPhone) {
+              const twilioClient = getTwilioClient();
+              const fromNumber = await getTwilioFromPhoneNumber();
+              
+              if (twilioClient && fromNumber) {
+                const client = await twilioClient;
+                client.messages.create({
+                  body: `Your appointment for ${refreshed.service} on ${refreshed.date} at ${refreshed.time} has been cancelled. Contact us if you'd like to reschedule.`,
+                  to: refreshed.customerPhone,
+                  from: fromNumber,
+                }).catch((err: any) => {
+                  console.error("Failed to send cancellation SMS:", err);
+                });
+              }
             }
+            
+            sendAppointmentCancellationEmail(refreshed).catch(err => {
+              console.error("Failed to send cancellation email:", err);
+            });
+            
+            syncAppointmentCustomer(refreshed).catch(err => {
+              console.error("Failed to sync cancelled appointment to Mailchimp:", err);
+            });
           }
         }
       }
@@ -195,6 +223,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertAppointmentSchema.parse(req.body);
       const appointment = await storage.createAppointment(validatedData);
+      
+      // Send confirmation notifications
+      sendAppointmentConfirmationSms(appointment).catch(err => {
+        console.error("Failed to send confirmation SMS:", err);
+      });
+      
+      sendAppointmentConfirmationEmail(appointment).catch(err => {
+        console.error("Failed to send confirmation email:", err);
+      });
       
       // Auto-sync to Mailchimp if enabled
       syncAppointmentCustomer(appointment).catch(err => {
@@ -248,9 +285,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updated = await storage.updateAppointment(req.params.id, validatedData);
       
       if (updated) {
-        // Send SMS notification about the change
+        // Send notifications about the change
         sendAppointmentConfirmationSms(updated).catch(err => {
           console.error("Failed to send update SMS:", err);
+        });
+        
+        sendAppointmentConfirmationEmail(updated).catch(err => {
+          console.error("Failed to send update email:", err);
         });
         
         // Sync to Mailchimp if enabled
@@ -282,21 +323,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "cancelled",
       });
 
-      if (updated && updated.customerPhone) {
-        // Send cancellation SMS
-        const twilioClient = getTwilioClient();
-        const fromNumber = await getTwilioFromPhoneNumber();
-        
-        if (twilioClient && fromNumber) {
-          const client = await twilioClient;
-          client.messages.create({
-            body: `Your appointment for ${updated.service} on ${updated.date} at ${updated.time} has been cancelled. Contact us if you'd like to reschedule.`,
-            to: updated.customerPhone,
-            from: fromNumber,
-          }).catch((err: any) => {
-            console.error("Failed to send cancellation SMS:", err);
-          });
+      if (updated) {
+        // Send cancellation notifications
+        if (updated.customerPhone) {
+          const twilioClient = getTwilioClient();
+          const fromNumber = await getTwilioFromPhoneNumber();
+          
+          if (twilioClient && fromNumber) {
+            const client = await twilioClient;
+            client.messages.create({
+              body: `Your appointment for ${updated.service} on ${updated.date} at ${updated.time} has been cancelled. Contact us if you'd like to reschedule.`,
+              to: updated.customerPhone,
+              from: fromNumber,
+            }).catch((err: any) => {
+              console.error("Failed to send cancellation SMS:", err);
+            });
+          }
         }
+        
+        sendAppointmentCancellationEmail(updated).catch(err => {
+          console.error("Failed to send cancellation email:", err);
+        });
       }
 
       res.json(updated);
@@ -616,11 +663,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         if (customerAppointment && entities.date && entities.time) {
-          await storage.updateAppointment(customerAppointment.id, {
+          const updated = await storage.updateAppointment(customerAppointment.id, {
             date: entities.date,
             time: entities.time,
             service: entities.service || customerAppointment.service,
           });
+          
+          // Confirmation will be sent via TwiML response automatically
         }
       }
 
@@ -633,9 +682,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         if (customerAppointment) {
-          await storage.updateAppointment(customerAppointment.id, {
+          const cancelled = await storage.updateAppointment(customerAppointment.id, {
             status: "cancelled",
           });
+          
+          // Confirmation will be sent via TwiML response automatically
         }
       }
 
@@ -769,11 +820,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         if (customerAppointment && entities.date && entities.time) {
-          await storage.updateAppointment(customerAppointment.id, {
+          const updated = await storage.updateAppointment(customerAppointment.id, {
             date: entities.date,
             time: entities.time,
             service: entities.service || customerAppointment.service,
           });
+          
+          // AI voice response will confirm the update
         }
       }
 
@@ -786,9 +839,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         if (customerAppointment) {
-          await storage.updateAppointment(customerAppointment.id, {
+          const cancelled = await storage.updateAppointment(customerAppointment.id, {
             status: "cancelled",
           });
+          
+          // AI voice response will confirm the cancellation
         }
       }
 
@@ -970,6 +1025,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to sync conversation" });
     }
   });
+
+  // POST /api/reminders/send - Manually send reminder for an appointment
+  app.post("/api/reminders/send", async (req, res) => {
+    try {
+      const { appointmentId } = req.body;
+      
+      if (!appointmentId) {
+        return res.status(400).json({ error: "appointmentId is required" });
+      }
+
+      await sendAppointmentReminder(appointmentId);
+      res.json({ success: true, message: "Reminder sent successfully" });
+    } catch (error) {
+      console.error("Send reminder error:", error);
+      res.status(500).json({ error: "Failed to send reminder" });
+    }
+  });
+
+  // Start the reminder scheduler
+  startReminderScheduler();
 
   const httpServer = createServer(app);
 

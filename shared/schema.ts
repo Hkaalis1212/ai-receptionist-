@@ -74,6 +74,7 @@ export const appointments = pgTable("appointments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   mailchimpMemberId: text("mailchimp_member_id"),
   mailchimpSyncedAt: timestamp("mailchimp_synced_at"),
+  lastReminderSentAt: timestamp("last_reminder_sent_at"),
 });
 
 export const insertAppointmentSchema = createInsertSchema(appointments)
