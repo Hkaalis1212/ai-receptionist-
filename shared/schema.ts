@@ -98,6 +98,7 @@ export const settings = pgTable("settings", {
   timezone: text("timezone").notNull(),
   welcomeMessage: text("welcome_message"),
   escalationEmail: text("escalation_email"),
+  elevenLabsVoiceId: text("eleven_labs_voice_id"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

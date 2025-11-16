@@ -8,6 +8,7 @@ import { getTwilioClient, getTwilioFromPhoneNumber } from "./twilio-client";
 import { sendAppointmentConfirmationSms } from "./notifications";
 import twilio from "twilio";
 import { z } from "zod";
+import { textToSpeech, getAvailableVoices } from "./elevenlabs-client";
 
 // Initialize Stripe - referenced from blueprint:javascript_stripe
 // Only initialize if the secret key is provided
@@ -402,13 +403,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const settings = await storage.getSettings();
 
+      const greeting = `Hello! You've reached ${settings.businessName}. We're an AI-powered receptionist. Please tell us how we can help you today.`;
+      
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice">Hello! You've reached ${settings.businessName}. We're an AI-powered receptionist.</Say>
+  <Play>${req.protocol}://${req.get('host')}/api/twilio/tts?text=${encodeURIComponent(greeting)}&callSid=${CallSid}</Play>
   <Gather input="speech" action="/api/twilio/voice/gather" method="POST" timeout="3" speechTimeout="auto">
-    <Say voice="alice">Please tell us how we can help you today.</Say>
+    <Pause length="1"/>
   </Gather>
-  <Say voice="alice">We didn't receive your response. Please call back. Goodbye!</Say>
+  <Play>${req.protocol}://${req.get('host')}/api/twilio/tts?text=${encodeURIComponent("We didn't receive your response. Please call back. Goodbye!")}</Play>
 </Response>`;
 
       res.type('text/xml');
@@ -452,13 +455,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         settings,
       });
 
+      const followUp = "Is there anything else I can help you with?";
+      const goodbye = "Thank you for calling. Goodbye!";
+
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice">${aiResponse.message}</Say>
+  <Play>${req.protocol}://${req.get('host')}/api/twilio/tts?text=${encodeURIComponent(aiResponse.message)}</Play>
   <Gather input="speech" action="/api/twilio/voice/gather" method="POST" timeout="3" speechTimeout="auto">
-    <Say voice="alice">Is there anything else I can help you with?</Say>
+    <Play>${req.protocol}://${req.get('host')}/api/twilio/tts?text=${encodeURIComponent(followUp)}</Play>
   </Gather>
-  <Say voice="alice">Thank you for calling. Goodbye!</Say>
+  <Play>${req.protocol}://${req.get('host')}/api/twilio/tts?text=${encodeURIComponent(goodbye)}</Play>
   <Hangup/>
 </Response>`;
 
@@ -514,6 +520,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get communications error:", error);
       res.status(500).json({ error: "Failed to fetch communications" });
+    }
+  });
+
+  // GET /api/twilio/tts - Generate speech audio with ElevenLabs
+  app.get("/api/twilio/tts", async (req, res) => {
+    try {
+      const text = req.query.text as string;
+      
+      if (!text) {
+        return res.status(400).send("Missing text parameter");
+      }
+
+      const settings = await storage.getSettings();
+      const voiceId = settings.elevenLabsVoiceId || undefined;
+
+      const audioBuffer = await textToSpeech(text, voiceId);
+      
+      res.set({
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': audioBuffer.length,
+      });
+      
+      res.send(audioBuffer);
+    } catch (error) {
+      console.error("TTS error:", error);
+      res.status(500).send("Text-to-speech generation failed");
+    }
+  });
+
+  // GET /api/elevenlabs/voices - Get available ElevenLabs voices
+  app.get("/api/elevenlabs/voices", async (req, res) => {
+    try {
+      const voices = await getAvailableVoices();
+      res.json(voices);
+    } catch (error) {
+      console.error("Get voices error:", error);
+      res.status(500).json({ error: "Failed to fetch voices" });
     }
   });
 

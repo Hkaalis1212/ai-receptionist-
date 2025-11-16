@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Form,
   FormControl,
   FormDescription,
@@ -33,6 +40,7 @@ const settingsFormSchema = z.object({
   timezone: z.string(),
   welcomeMessage: z.string().optional(),
   escalationEmail: z.string().email("Invalid email").or(z.literal("")).optional(),
+  elevenLabsVoiceId: z.string().optional(),
 });
 
 type SettingsForm = z.infer<typeof settingsFormSchema>;
@@ -44,6 +52,10 @@ export default function SettingsPage() {
     queryKey: ["/api/settings"],
   });
 
+  const { data: voices } = useQuery<Array<{ id: string; name: string; category: string }>>({
+    queryKey: ["/api/elevenlabs/voices"],
+  });
+
   const form = useForm<SettingsForm>({
     resolver: zodResolver(settingsFormSchema),
     values: settings ? {
@@ -51,6 +63,7 @@ export default function SettingsPage() {
       businessPhone: settings.businessPhone || "",
       welcomeMessage: settings.welcomeMessage || "",
       escalationEmail: settings.escalationEmail || "",
+      elevenLabsVoiceId: settings.elevenLabsVoiceId || "",
     } : {
       businessName: "",
       businessType: "",
@@ -60,6 +73,7 @@ export default function SettingsPage() {
       timezone: "UTC",
       welcomeMessage: "",
       escalationEmail: "",
+      elevenLabsVoiceId: "",
     },
   });
 
@@ -330,6 +344,36 @@ export default function SettingsPage() {
                         </FormControl>
                         <FormDescription>
                           Where to send notifications for escalated conversations
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="elevenLabsVoiceId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Voice for Phone Calls (Optional)</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-voice">
+                              <SelectValue placeholder="Select a voice (default: Rachel)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {voices?.map((voice) => (
+                              <SelectItem key={voice.id} value={voice.id}>
+                                {voice.name} ({voice.category})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Choose an ElevenLabs voice for AI phone call responses
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
