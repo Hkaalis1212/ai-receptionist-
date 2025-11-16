@@ -45,7 +45,7 @@ Preferred communication style: Simple, everyday language.
 **Schema Design**:
 - **Messages Table**: Stores conversation messages with role (user/assistant/system), content, timestamp, and conversation reference
 - **Conversations Table**: Tracks conversation metadata including status (active/completed/escalated), sentiment, intent classification, and customer contact information
-- **Appointments Table**: Manages booking data with service, date/time, status (pending/confirmed/cancelled/completed), customer details, payment amount (amountCents), payment status, and Stripe payment intent ID
+- **Appointments Table**: Manages booking data with service, date/time, status (pending/confirmed/cancelled/completed), customer details, payment amount (amountCents), payment status, Stripe payment intent ID, and lastReminderSentAt timestamp for reminder idempotency
 - **SMS Messages Table**: Logs all SMS communications with Twilio message SID, direction (inbound/outbound), from/to numbers, message body, status, and optional appointment/conversation links
 - **Call Logs Table**: Records voice call data including Twilio call SID, direction, from/to numbers, call status, duration, recording URL, transcript, and optional appointment/conversation links
 - **Settings Table**: Stores business configuration including name, type, business phone, available services, working hours, timezone, welcome message, escalation email, ElevenLabs voice ID for phone calls, Mailchimp audience ID, and Mailchimp sync enable flag (string literal "true"/"false")
@@ -81,3 +81,81 @@ Preferred communication style: Simple, everyday language.
 - Replit-specific plugins for development experience (runtime error modal, cartographer, dev banner)
 - TypeScript strict mode for maximum type safety
 - Path aliases (`@/`, `@shared/`, `@assets/`) for clean imports
+
+## Recent Changes (November 16, 2025)
+
+### Multi-Channel Appointment Management
+Implemented comprehensive appointment management system with full reschedule and cancel capabilities across all channels:
+
+**Appointment Operations API:**
+- GET /api/appointments/:id - Retrieve single appointment
+- PUT /api/appointments/:id - Update/reschedule appointment
+- POST /api/appointments/:id/cancel - Cancel appointment with notifications
+- All endpoints send multi-channel notifications (Email + SMS)
+- All endpoints sync with Mailchimp customer data
+
+**Multi-Channel Support:**
+- **Web Chat**: Book, reschedule, cancel via AI conversation
+- **SMS**: Full appointment management via text messages
+- **Voice Calls**: Speak to AI for appointment operations
+- **API**: Direct REST endpoint access
+
+**AI Enhancements:**
+- Extended intent recognition: "booking", "reschedule", "cancel"
+- Enhanced entity extraction: appointmentId, name, email, phone, date, time, service
+- Automatic appointment lookup by customer identifiers
+- Natural language processing for all appointment operations
+
+**Email Notification System (Resend):**
+- Professional HTML email templates
+- Appointment confirmation emails
+- Appointment cancellation emails
+- Appointment reminder emails (24hr advance)
+- Error propagation for proper failure handling
+
+**Reminder Scheduler:**
+- Automated background scheduler running hourly
+- Checks for appointments happening tomorrow
+- Sends Email + SMS reminders 24 hours in advance
+- Idempotency via lastReminderSentAt timestamp with 12-hour cooldown
+- Optimistic timestamp update before delivery attempts
+- Manual trigger endpoint: POST /api/reminders/send
+- Returns HTTP 500 when delivery fails (honest error reporting)
+- Background scheduler continues processing even if individual reminders fail
+- Verified with E2E testing (idempotency confirmed)
+
+**Data Consistency:**
+- All reschedule/cancel operations re-fetch fresh appointment data after updates
+- Notifications always use current dates/times (no stale data bugs)
+- Mailchimp sync consistent across all channels
+
+**Error Handling:**
+- Differentiated error propagation strategy:
+  - Reminder endpoint: Hard-fails (HTTP 500) if notifications can't be sent
+  - Booking/reschedule/cancel endpoints: Succeed with core operation, log notification failures
+- Email functions throw errors that bubble up to callers
+- Background scheduler resilient (logs errors and continues processing)
+
+## Technical Debt
+
+### Structured Notification Outcomes (Future Enhancement)
+**Status**: Documented for future implementation
+
+**Current Behavior:**
+- Booking/reschedule/cancel endpoints succeed even if notifications fail
+- Notification failures logged to console only
+- No structured response indicating partial success
+
+**Proposed Enhancement:**
+- Create notification dispatch helper returning per-channel outcomes
+- Return structured responses: `{ status: "partial-success", notifications: { email: "failed", sms: "sent" } }`
+- Update API documentation and tests for partial-success semantics
+- Add observability hooks (logs/metrics/alerts) for notification failures
+- Coordinate client updates to surface warnings to users
+
+**Why Deferred:**
+- Breaking API change requiring coordinated client updates
+- Adds complexity (new helper abstraction, expanded tests, observability infrastructure)
+- Marginal immediate value compared to complexity
+- Current implementation meets functional requirements
+- Prioritize for next iteration when monitoring requirements are clearer
