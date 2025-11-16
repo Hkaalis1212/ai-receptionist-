@@ -240,6 +240,7 @@ export class DatabaseStorage implements IStorage {
   async getAnalytics(): Promise<Analytics> {
     const conversations = await db.select().from(schema.conversations);
     const appointments = await db.select().from(schema.appointments);
+    const callLogs = await db.select().from(schema.callLogs);
 
     const totalConversations = conversations.length;
     const activeConversations = conversations.filter(
@@ -259,6 +260,24 @@ export class DatabaseStorage implements IStorage {
     const pendingAppointments = appointments.filter(
       (a) => a.status === "pending"
     ).length;
+
+    // Calculate total calls
+    const totalCalls = callLogs.length;
+
+    // Calculate total revenue (sum of all appointment amounts in cents)
+    const totalRevenue = appointments.reduce((sum, apt) => {
+      return sum + (apt.amountCents || 0);
+    }, 0);
+
+    // Calculate unique customers (unique emails across conversations and appointments)
+    const uniqueEmails = new Set<string>();
+    conversations.forEach((c) => {
+      if (c.customerEmail) uniqueEmails.add(c.customerEmail.toLowerCase());
+    });
+    appointments.forEach((a) => {
+      if (a.customerEmail) uniqueEmails.add(a.customerEmail.toLowerCase());
+    });
+    const uniqueCustomers = uniqueEmails.size;
 
     const sentimentBreakdown = {
       positive: conversations.filter((c) => c.sentiment === "positive").length,
@@ -287,6 +306,9 @@ export class DatabaseStorage implements IStorage {
       totalAppointments,
       confirmedAppointments,
       pendingAppointments,
+      totalCalls,
+      totalRevenue,
+      uniqueCustomers,
       sentimentBreakdown,
       intentBreakdown,
     };

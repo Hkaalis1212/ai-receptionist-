@@ -134,6 +134,9 @@ export const analyticsSchema = z.object({
   totalAppointments: z.number(),
   confirmedAppointments: z.number(),
   pendingAppointments: z.number(),
+  totalCalls: z.number(),
+  totalRevenue: z.number(),
+  uniqueCustomers: z.number(),
   sentimentBreakdown: z.object({
     positive: z.number(),
     neutral: z.number(),

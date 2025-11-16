@@ -13,6 +13,7 @@ import { textToSpeech, getAvailableVoices } from "./elevenlabs-client";
 import { getAudiences, getAudienceStats } from "./mailchimp-client";
 import { syncAppointmentCustomer, syncConversationCustomer } from "./mailchimp-sync";
 import { startReminderScheduler, sendAppointmentReminder } from "./reminder-scheduler";
+import { logDataModification, logApiAccess } from "./audit-logger";
 
 // Initialize Stripe - referenced from blueprint:javascript_stripe
 // Only initialize if the secret key is provided
@@ -457,6 +458,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/audit-logs - Get audit logs (for admin dashboard)
+  app.get("/api/audit-logs", async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      const logs = await storage.getAllAuditLogs(limit);
+      res.json(logs);
+    } catch (error) {
+      console.error("Get audit logs error:", error);
+      res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+
   // GET /api/settings - Get settings
   app.get("/api/settings", async (req, res) => {
     try {
@@ -472,6 +485,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/settings", async (req, res) => {
     try {
       const settings = await storage.updateSettings(req.body);
+      await logDataModification("UPDATE", "settings", "default", req, "Business settings updated");
       res.json(settings);
     } catch (error) {
       console.error("Update settings error:", error);
@@ -1143,6 +1157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/knowledge-base", async (req, res) => {
     try {
       const entry = await storage.createKnowledgeBase(req.body);
+      await logDataModification("CREATE", "knowledge_base", entry.id, req, `KB entry: ${entry.question.substring(0, 50)}`);
       res.json(entry);
     } catch (error) {
       console.error("Create knowledge base error:", error);
@@ -1157,6 +1172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!updated) {
         return res.status(404).json({ error: "Knowledge base entry not found" });
       }
+      await logDataModification("UPDATE", "knowledge_base", req.params.id, req, "KB entry updated");
       res.json(updated);
     } catch (error) {
       console.error("Update knowledge base error:", error);
@@ -1168,6 +1184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/knowledge-base/:id", async (req, res) => {
     try {
       await storage.deleteKnowledgeBase(req.params.id);
+      await logDataModification("DELETE", "knowledge_base", req.params.id, req, "KB entry deleted");
       res.json({ success: true });
     } catch (error) {
       console.error("Delete knowledge base error:", error);

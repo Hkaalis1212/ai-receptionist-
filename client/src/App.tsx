@@ -19,7 +19,7 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { MessageSquare, LayoutDashboard, Calendar, Settings, Bot, Phone } from "lucide-react";
+import { MessageSquare, LayoutDashboard, Calendar, Settings, Bot, Phone, Shield } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import Chat from "@/pages/chat";
 import Dashboard from "@/pages/dashboard";
@@ -27,6 +27,7 @@ import Appointments from "@/pages/appointments";
 import SettingsPage from "@/pages/settings";
 import Checkout from "@/pages/checkout";
 import Communications from "@/pages/communications";
+import AdminDashboard from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
 const navigation = [
@@ -49,6 +50,11 @@ const navigation = [
     title: "Communications",
     url: "/communications",
     icon: Phone,
+  },
+  {
+    title: "Admin",
+    url: "/admin",
+    icon: Shield,
   },
   {
     title: "Settings",
@@ -113,6 +119,7 @@ function Router() {
       <Route path="/appointments" component={Appointments} />
       <Route path="/communications" component={Communications} />
       <Route path="/checkout" component={Checkout} />
+      <Route path="/admin" component={AdminDashboard} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>

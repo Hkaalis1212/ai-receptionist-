@@ -54,6 +54,9 @@ const settingsFormSchema = z.object({
   elevenLabsVoiceId: z.string().optional(),
   mailchimpAudienceId: z.string().optional(),
   mailchimpEnableSync: z.enum(["true", "false"]).optional(),
+  voiceLanguage: z.string().optional(),
+  customCallScript: z.string().optional(),
+  recordingDisclosure: z.string().optional(),
 });
 
 type SettingsForm = z.infer<typeof settingsFormSchema>;
@@ -98,6 +101,9 @@ export default function SettingsPage() {
       elevenLabsVoiceId: settings.elevenLabsVoiceId || "",
       mailchimpAudienceId: settings.mailchimpAudienceId || "",
       mailchimpEnableSync: settings.mailchimpEnableSync || "false",
+      voiceLanguage: settings.voiceLanguage || "",
+      customCallScript: settings.customCallScript || "",
+      recordingDisclosure: settings.recordingDisclosure || "",
     } : {
       businessName: "",
       businessType: "",
@@ -110,6 +116,9 @@ export default function SettingsPage() {
       elevenLabsVoiceId: "",
       mailchimpAudienceId: "",
       mailchimpEnableSync: "false",
+      voiceLanguage: "",
+      customCallScript: "",
+      recordingDisclosure: "",
     },
   });
 
@@ -514,6 +523,85 @@ export default function SettingsPage() {
                         </Select>
                         <FormDescription>
                           Choose an ElevenLabs voice for AI phone call responses
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="voiceLanguage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Voice Language (Optional)</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || ""}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-language">
+                              <SelectValue placeholder="Select a language (default: English)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="en">English</SelectItem>
+                            <SelectItem value="es">Spanish</SelectItem>
+                            <SelectItem value="fr">French</SelectItem>
+                            <SelectItem value="de">German</SelectItem>
+                            <SelectItem value="it">Italian</SelectItem>
+                            <SelectItem value="pt">Portuguese</SelectItem>
+                            <SelectItem value="zh">Chinese</SelectItem>
+                            <SelectItem value="ja">Japanese</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Language for AI voice call responses
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="customCallScript"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Custom Call Script (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Custom message for phone calls. Leave blank to use default."
+                            className="resize-none"
+                            rows={3}
+                            {...field}
+                            value={field.value || ""}
+                            data-testid="input-call-script"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Custom message to greet phone callers (used instead of default greeting)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="recordingDisclosure"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Call Recording Disclosure (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="This call may be recorded for quality and training purposes."
+                            className="resize-none"
+                            rows={2}
+                            {...field}
+                            value={field.value || ""}
+                            data-testid="input-recording-disclosure"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Privacy disclosure played at the start of phone calls (compliance requirement)
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
