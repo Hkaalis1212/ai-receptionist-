@@ -36,17 +36,34 @@ export async function textToSpeech(
 }
 
 export async function getAvailableVoices() {
-  const client = getElevenLabsClient();
-  
   try {
+    const client = getElevenLabsClient();
     const voices = await client.voices.getAll();
     return voices.voices.map((voice: any) => ({
       id: voice.voice_id,
       name: voice.name,
       category: voice.category,
     }));
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching ElevenLabs voices:", error);
-    return [];
+    
+    // Return default voice options when API fails
+    return [
+      {
+        id: "21m00Tcm4TlvDq8ikWAM",
+        name: "Rachel",
+        category: "premade",
+      },
+      {
+        id: "EXAVITQu4vr4xnSDxMaL",
+        name: "Bella",
+        category: "premade",
+      },
+      {
+        id: "pNInz6obpgDQGcFmaJgB",
+        name: "Adam",
+        category: "premade",
+      },
+    ];
   }
 }
