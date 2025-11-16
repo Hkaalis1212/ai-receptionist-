@@ -97,6 +97,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           date: entities.date,
           time: entities.time,
           status: "pending",
+          amountCents: 5000, // Default $50.00 - can be configured per service
+          paymentStatus: "pending",
           notes: `Booked via AI Receptionist`,
         });
 

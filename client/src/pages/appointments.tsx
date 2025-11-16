@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, User, Phone, Mail, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar, Clock, User, Phone, Mail, FileText, CreditCard } from "lucide-react";
 import { type Appointment } from "@shared/schema";
 
 export default function Appointments() {
+  const [, setLocation] = useLocation();
   const { data: appointments, isLoading } = useQuery<Appointment[]>({
     queryKey: ["/api/appointments"],
   });
@@ -38,6 +41,25 @@ export default function Appointments() {
       default:
         return "text-muted-foreground";
     }
+  };
+
+  const getPaymentStatusVariant = (paymentStatus: Appointment["paymentStatus"]) => {
+    switch (paymentStatus) {
+      case "paid":
+        return "default";
+      case "pending":
+        return "secondary";
+      case "failed":
+        return "destructive";
+      case "refunded":
+        return "outline";
+      default:
+        return "secondary";
+    }
+  };
+
+  const handlePayNow = (appointmentId: string) => {
+    setLocation(`/checkout?appointmentId=${appointmentId}`);
   };
 
   if (isLoading) {
@@ -102,13 +124,20 @@ export default function Appointments() {
               {sortedAppointments.map((appointment) => (
                 <Card key={appointment.id} data-testid={`appointment-${appointment.id}`} className="hover-elevate">
                   <CardHeader>
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
                       <CardTitle className="text-lg">
                         {appointment.service}
                       </CardTitle>
-                      <Badge variant={getStatusVariant(appointment.status)}>
-                        {appointment.status}
-                      </Badge>
+                      <div className="flex gap-2 flex-wrap">
+                        <Badge variant={getStatusVariant(appointment.status)}>
+                          {appointment.status}
+                        </Badge>
+                        {appointment.paymentStatus && (
+                          <Badge variant={getPaymentStatusVariant(appointment.paymentStatus)}>
+                            Payment: {appointment.paymentStatus}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -155,6 +184,28 @@ export default function Appointments() {
                         )}
                       </div>
                     </div>
+                    
+                    {(appointment.amountCents || appointment.paymentStatus === "pending") && (
+                      <div className="flex items-center justify-between gap-4 pt-4 border-t border-border flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <CreditCard className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">
+                            {appointment.amountCents 
+                              ? `Amount: $${(appointment.amountCents / 100).toFixed(2)}`
+                              : "Amount: Pending"}
+                          </span>
+                        </div>
+                        {appointment.paymentStatus === "pending" && (
+                          <Button 
+                            size="sm"
+                            onClick={() => handlePayNow(appointment.id)}
+                            data-testid={`button-pay-${appointment.id}`}
+                          >
+                            Pay Now
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}

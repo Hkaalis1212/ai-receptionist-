@@ -61,17 +61,23 @@ export const appointments = pgTable("appointments", {
   date: text("date").notNull(),
   time: text("time").notNull(),
   status: appointmentStatusEnum("status").notNull().default("pending"),
-  amountCents: integer("amount_cents"),
-  paymentStatus: paymentStatusEnum("payment_status").default("pending"),
+  amountCents: integer("amount_cents").notNull(),
+  paymentStatus: paymentStatusEnum("payment_status").notNull().default("pending"),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertAppointmentSchema = createInsertSchema(appointments).omit({ 
-  id: true, 
-  createdAt: true 
-});
+export const insertAppointmentSchema = createInsertSchema(appointments)
+  .omit({ 
+    id: true, 
+    createdAt: true 
+  })
+  .extend({
+    amountCents: z.number().int().positive({
+      message: "Amount must be a positive integer in cents"
+    })
+  });
 
 export type Appointment = typeof appointments.$inferSelect;
 export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
