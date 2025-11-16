@@ -14,6 +14,7 @@ export const smsDirectionEnum = pgEnum("sms_direction", ["inbound", "outbound"])
 export const smsStatusEnum = pgEnum("sms_status", ["queued", "sent", "delivered", "failed", "received"]);
 export const callDirectionEnum = pgEnum("call_direction", ["inbound", "outbound"]);
 export const callStatusEnum = pgEnum("call_status", ["initiated", "ringing", "in-progress", "completed", "busy", "failed", "no-answer"]);
+export const knowledgeBaseCategoryEnum = pgEnum("knowledge_base_category", ["hours", "services", "policies", "directions", "pricing", "contact", "general"]);
 
 // Messages table
 export const messages = pgTable("messages", {
@@ -223,6 +224,26 @@ export const insertCallLogSchema = createInsertSchema(callLogs).omit({
 
 export type CallLog = typeof callLogs.$inferSelect;
 export type InsertCallLog = z.infer<typeof insertCallLogSchema>;
+
+// Knowledge Base table
+export const knowledgeBase = pgTable("knowledge_base", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  question: text("question").notNull(),
+  answer: text("answer").notNull(),
+  category: knowledgeBaseCategoryEnum("category").notNull(),
+  isActive: integer("is_active").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertKnowledgeBaseSchema = createInsertSchema(knowledgeBase).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type KnowledgeBase = typeof knowledgeBase.$inferSelect;
+export type InsertKnowledgeBase = z.infer<typeof insertKnowledgeBaseSchema>;
 
 // Helper type for settings with working hours object
 export type SettingsWithWorkingHours = Omit<Settings, 'workingHoursStart' | 'workingHoursEnd'> & {

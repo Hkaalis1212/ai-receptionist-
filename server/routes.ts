@@ -734,6 +734,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const settings = await storage.getSettings();
 
+      // Start call recording using Twilio REST API
+      const twilioClient = getTwilioClient();
+      if (twilioClient) {
+        const client = await twilioClient;
+        try {
+          await client.calls(CallSid).recordings.create({
+            recordingStatusCallback: `${req.protocol}://${req.get('host')}/api/twilio/voice/status`,
+          });
+        } catch (error) {
+          console.error("Failed to start call recording:", error);
+        }
+      }
+
       const greeting = `Hello! You've reached ${settings.businessName}. We're an AI-powered receptionist. Please tell us how we can help you today.`;
       
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -1040,6 +1053,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Send reminder error:", error);
       res.status(500).json({ error: "Failed to send reminder" });
+    }
+  });
+
+  // Knowledge Base endpoints
+  // GET /api/knowledge-base - Get all knowledge base entries
+  app.get("/api/knowledge-base", async (req, res) => {
+    try {
+      const entries = await storage.getAllKnowledgeBase();
+      res.json(entries);
+    } catch (error) {
+      console.error("Get knowledge base error:", error);
+      res.status(500).json({ error: "Failed to fetch knowledge base" });
+    }
+  });
+
+  // POST /api/knowledge-base - Create new knowledge base entry
+  app.post("/api/knowledge-base", async (req, res) => {
+    try {
+      const entry = await storage.createKnowledgeBase(req.body);
+      res.json(entry);
+    } catch (error) {
+      console.error("Create knowledge base error:", error);
+      res.status(500).json({ error: "Failed to create knowledge base entry" });
+    }
+  });
+
+  // PUT /api/knowledge-base/:id - Update knowledge base entry
+  app.put("/api/knowledge-base/:id", async (req, res) => {
+    try {
+      const updated = await storage.updateKnowledgeBase(req.params.id, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "Knowledge base entry not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Update knowledge base error:", error);
+      res.status(500).json({ error: "Failed to update knowledge base entry" });
+    }
+  });
+
+  // DELETE /api/knowledge-base/:id - Delete knowledge base entry
+  app.delete("/api/knowledge-base/:id", async (req, res) => {
+    try {
+      await storage.deleteKnowledgeBase(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete knowledge base error:", error);
+      res.status(500).json({ error: "Failed to delete knowledge base entry" });
     }
   });
 

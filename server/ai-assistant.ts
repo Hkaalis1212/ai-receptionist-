@@ -1,5 +1,6 @@
 import OpenAI from "openai";
-import { type Message, type SettingsWithWorkingHours } from "@shared/schema";
+import { type Message, type SettingsWithWorkingHours, type KnowledgeBase } from "@shared/schema";
+import { storage } from "./storage";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({
@@ -34,7 +35,10 @@ export async function getAIResponse(
 ): Promise<AIResponse> {
   const { messages, settings } = context;
 
-  const systemPrompt = buildSystemPrompt(settings);
+  // Fetch active knowledge base for FAQs
+  const knowledgeBase = await storage.getActiveKnowledgeBase();
+  
+  const systemPrompt = buildSystemPrompt(settings, knowledgeBase);
   const conversationHistory = buildConversationHistory(messages, userMessage);
 
   try {
@@ -78,8 +82,28 @@ export async function getAIResponse(
   }
 }
 
-function buildSystemPrompt(settings: SettingsWithWorkingHours): string {
+function buildSystemPrompt(settings: SettingsWithWorkingHours, knowledgeBase: KnowledgeBase[]): string {
   const services = settings.availableServices.join(", ");
+  
+  // Build knowledge base section
+  const kbByCategory: Record<string, KnowledgeBase[]> = {};
+  knowledgeBase.forEach(kb => {
+    if (!kbByCategory[kb.category]) {
+      kbByCategory[kb.category] = [];
+    }
+    kbByCategory[kb.category].push(kb);
+  });
+  
+  let knowledgeBaseSection = '';
+  if (Object.keys(kbByCategory).length > 0) {
+    knowledgeBaseSection = '\n\nKnowledge Base - Use this information to answer customer questions:\n';
+    for (const [category, items] of Object.entries(kbByCategory)) {
+      knowledgeBaseSection += `\n${category.toUpperCase()}:\n`;
+      items.forEach(item => {
+        knowledgeBaseSection += `Q: ${item.question}\nA: ${item.answer}\n\n`;
+      });
+    }
+  }
 
   return `You are an intelligent AI Receptionist for ${settings.businessName}, a ${settings.businessType} business.
 
@@ -96,7 +120,7 @@ Business Information:
 - Type: ${settings.businessType}
 - Available Services: ${services}
 - Working Hours: ${settings.workingHours.start} - ${settings.workingHours.end} ${settings.timezone}
-${settings.welcomeMessage ? `- Custom Welcome: ${settings.welcomeMessage}` : ""}
+${settings.welcomeMessage ? `- Custom Welcome: ${settings.welcomeMessage}` : ""}${knowledgeBaseSection}
 
 IMPORTANT: You must ALWAYS respond in valid JSON format with this structure:
 {
@@ -130,6 +154,10 @@ Guidelines:
   * Confirm the action before executing
   * Extract new date/time if rescheduling
 - Assess sentiment: positive (grateful, happy), neutral (factual), or negative (frustrated, angry)
+- ADJUST YOUR TONE based on detected sentiment:
+  * POSITIVE sentiment: Be enthusiastic and appreciative ("I'm delighted to help!", "Wonderful choice!")
+  * NEUTRAL sentiment: Be professional and clear (standard business tone)
+  * NEGATIVE sentiment: Be empathetic and apologetic ("I understand your frustration", "I'm sorry for the inconvenience")
 - Set requiresEscalation to true if: customer is angry, request is complex, or you can't help
 - Extract entities mentioned in the conversation - be sure to capture all details
 - Keep responses concise but informative (2-3 sentences max)

@@ -17,6 +17,8 @@ import {
   type InsertSmsMessage,
   type CallLog,
   type InsertCallLog,
+  type KnowledgeBase,
+  type InsertKnowledgeBase,
 } from "@shared/schema";
 
 const client = neon(process.env.DATABASE_URL!);
@@ -65,6 +67,14 @@ export interface IStorage {
   getCallLogBySid(sid: string): Promise<CallLog | undefined>;
   getAllCallLogs(): Promise<CallLog[]>;
   updateCallLog(id: string, updates: Partial<CallLog>): Promise<CallLog | undefined>;
+
+  // Knowledge Base
+  createKnowledgeBase(kb: InsertKnowledgeBase): Promise<KnowledgeBase>;
+  getKnowledgeBase(id: string): Promise<KnowledgeBase | undefined>;
+  getAllKnowledgeBase(): Promise<KnowledgeBase[]>;
+  getActiveKnowledgeBase(): Promise<KnowledgeBase[]>;
+  updateKnowledgeBase(id: string, updates: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined>;
+  deleteKnowledgeBase(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -366,6 +376,56 @@ export class DatabaseStorage implements IStorage {
       .where(eq(schema.callLogs.id, id))
       .returning();
     return updated;
+  }
+
+  // Knowledge Base
+  async createKnowledgeBase(insertKb: InsertKnowledgeBase): Promise<KnowledgeBase> {
+    const [kb] = await db
+      .insert(schema.knowledgeBase)
+      .values(insertKb)
+      .returning();
+    return kb;
+  }
+
+  async getKnowledgeBase(id: string): Promise<KnowledgeBase | undefined> {
+    const [kb] = await db
+      .select()
+      .from(schema.knowledgeBase)
+      .where(eq(schema.knowledgeBase.id, id));
+    return kb;
+  }
+
+  async getAllKnowledgeBase(): Promise<KnowledgeBase[]> {
+    return await db
+      .select()
+      .from(schema.knowledgeBase)
+      .orderBy(desc(schema.knowledgeBase.createdAt));
+  }
+
+  async getActiveKnowledgeBase(): Promise<KnowledgeBase[]> {
+    return await db
+      .select()
+      .from(schema.knowledgeBase)
+      .where(eq(schema.knowledgeBase.isActive, 1))
+      .orderBy(schema.knowledgeBase.category, schema.knowledgeBase.createdAt);
+  }
+
+  async updateKnowledgeBase(
+    id: string,
+    updates: Partial<KnowledgeBase>
+  ): Promise<KnowledgeBase | undefined> {
+    const [updated] = await db
+      .update(schema.knowledgeBase)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.knowledgeBase.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteKnowledgeBase(id: string): Promise<void> {
+    await db
+      .delete(schema.knowledgeBase)
+      .where(eq(schema.knowledgeBase.id, id));
   }
 }
 
