@@ -4,6 +4,10 @@ import { storage } from "./storage";
 import { getAIResponse } from "./ai-assistant";
 import { chatRequestSchema, insertAppointmentSchema } from "@shared/schema";
 import Stripe from "stripe";
+import { getTwilioClient, getTwilioFromPhoneNumber } from "./twilio-client";
+import { sendAppointmentConfirmationSms } from "./notifications";
+import twilio from "twilio";
+import { z } from "zod";
 
 // Initialize Stripe - referenced from blueprint:javascript_stripe
 // Only initialize if the secret key is provided
@@ -216,6 +220,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "confirmed",
       });
 
+      // Send confirmation SMS if phone number is available
+      if (appointment) {
+        sendAppointmentConfirmationSms(appointment).catch(err => {
+          console.error("Failed to send confirmation SMS:", err);
+        });
+      }
+
       res.json(appointment);
     } catch (error: any) {
       console.error("Confirm payment error:", error);
@@ -255,6 +266,254 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Update settings error:", error);
       res.status(400).json({ error: "Invalid settings data" });
+    }
+  });
+
+  // Validation schema for sending SMS
+  const sendSmsSchema = z.object({
+    to: z.string().min(1, "Phone number is required"),
+    body: z.string().min(1, "Message body is required"),
+    appointmentId: z.string().optional(),
+  });
+
+  // POST /api/twilio/sms/send - Send SMS
+  app.post("/api/twilio/sms/send", async (req, res) => {
+    try {
+      const validatedData = sendSmsSchema.parse(req.body);
+      const { to, body, appointmentId } = validatedData;
+
+      const twilioClient = await getTwilioClient();
+      const fromNumber = await getTwilioFromPhoneNumber();
+
+      if (!fromNumber) {
+        return res.status(500).json({ 
+          error: "Twilio phone number not configured" 
+        });
+      }
+
+      const message = await twilioClient.messages.create({
+        to,
+        from: fromNumber,
+        body,
+      });
+
+      const smsMessage = await storage.createSmsMessage({
+        twilioMessageSid: message.sid,
+        direction: "outbound",
+        from: fromNumber,
+        to,
+        body,
+        status: "sent",
+        appointmentId,
+      });
+
+      res.json(smsMessage);
+    } catch (error) {
+      console.error("Send SMS error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to send SMS" });
+    }
+  });
+
+  // Helper function to validate Twilio webhook signature
+  async function validateTwilioRequest(req: any): Promise<boolean> {
+    try {
+      const twilioClient = await getTwilioClient();
+      const authToken = (twilioClient as any).password;
+      
+      const twilioSignature = req.headers['x-twilio-signature'];
+      if (!twilioSignature) {
+        console.error("Missing Twilio signature header");
+        return false;
+      }
+
+      const url = `https://${req.headers.host}${req.originalUrl}`;
+      const isValid = twilio.validateRequest(
+        authToken,
+        twilioSignature,
+        url,
+        req.body
+      );
+
+      if (!isValid) {
+        console.error("Invalid Twilio signature");
+      }
+
+      return isValid;
+    } catch (error) {
+      console.error("Twilio validation error:", error);
+      return false;
+    }
+  }
+
+  // POST /api/twilio/sms/webhook - Receive SMS (Twilio webhook)
+  app.post("/api/twilio/sms/webhook", async (req, res) => {
+    try {
+      // Validate Twilio signature
+      const isValid = await validateTwilioRequest(req);
+      if (!isValid) {
+        return res.status(403).send('Forbidden');
+      }
+
+      const { MessageSid, From, To, Body } = req.body;
+
+      await storage.createSmsMessage({
+        twilioMessageSid: MessageSid,
+        direction: "inbound",
+        from: From,
+        to: To,
+        body: Body,
+        status: "received",
+      });
+
+      res.type('text/xml');
+      res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+    } catch (error) {
+      console.error("SMS webhook error:", error);
+      res.type('text/xml');
+      res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+    }
+  });
+
+  // POST /api/twilio/voice/webhook - Handle incoming calls (Twilio webhook)
+  app.post("/api/twilio/voice/webhook", async (req, res) => {
+    try {
+      // Validate Twilio signature
+      const isValid = await validateTwilioRequest(req);
+      if (!isValid) {
+        return res.status(403).send('Forbidden');
+      }
+
+      const { CallSid, From, To, CallStatus } = req.body;
+
+      let callLog = await storage.getCallLogBySid(CallSid);
+      
+      if (!callLog) {
+        callLog = await storage.createCallLog({
+          twilioCallSid: CallSid,
+          direction: "inbound",
+          from: From,
+          to: To,
+          status: CallStatus || "initiated",
+        });
+      }
+
+      const settings = await storage.getSettings();
+
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Hello! You've reached ${settings.businessName}. We're an AI-powered receptionist.</Say>
+  <Gather input="speech" action="/api/twilio/voice/gather" method="POST" timeout="3" speechTimeout="auto">
+    <Say voice="alice">Please tell us how we can help you today.</Say>
+  </Gather>
+  <Say voice="alice">We didn't receive your response. Please call back. Goodbye!</Say>
+</Response>`;
+
+      res.type('text/xml');
+      res.send(twiml);
+    } catch (error) {
+      console.error("Voice webhook error:", error);
+      const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">We're experiencing technical difficulties. Please try again later. Goodbye!</Say>
+</Response>`;
+      res.type('text/xml');
+      res.send(errorTwiml);
+    }
+  });
+
+  // POST /api/twilio/voice/gather - Process speech input from call
+  app.post("/api/twilio/voice/gather", async (req, res) => {
+    try {
+      // Validate Twilio signature
+      const isValid = await validateTwilioRequest(req);
+      if (!isValid) {
+        return res.status(403).send('Forbidden');
+      }
+
+      const { CallSid, SpeechResult } = req.body;
+
+      let callLog = await storage.getCallLogBySid(CallSid);
+      
+      if (callLog) {
+        await storage.updateCallLog(callLog.id, {
+          transcript: SpeechResult,
+          status: "in-progress",
+        });
+      }
+
+      const settings = await storage.getSettings();
+      const messages: any[] = [];
+
+      const aiResponse = await getAIResponse(SpeechResult || "Hello", {
+        messages,
+        settings,
+      });
+
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">${aiResponse.message}</Say>
+  <Gather input="speech" action="/api/twilio/voice/gather" method="POST" timeout="3" speechTimeout="auto">
+    <Say voice="alice">Is there anything else I can help you with?</Say>
+  </Gather>
+  <Say voice="alice">Thank you for calling. Goodbye!</Say>
+  <Hangup/>
+</Response>`;
+
+      res.type('text/xml');
+      res.send(twiml);
+    } catch (error) {
+      console.error("Voice gather error:", error);
+      const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">I apologize, but I'm having trouble understanding. Please try again later. Goodbye!</Say>
+  <Hangup/>
+</Response>`;
+      res.type('text/xml');
+      res.send(errorTwiml);
+    }
+  });
+
+  // POST /api/twilio/voice/status - Call status updates (Twilio webhook)
+  app.post("/api/twilio/voice/status", async (req, res) => {
+    try {
+      // Validate Twilio signature
+      const isValid = await validateTwilioRequest(req);
+      if (!isValid) {
+        return res.status(403).send('Forbidden');
+      }
+
+      const { CallSid, CallStatus, CallDuration, RecordingUrl } = req.body;
+
+      const callLog = await storage.getCallLogBySid(CallSid);
+      
+      if (callLog) {
+        await storage.updateCallLog(callLog.id, {
+          status: CallStatus,
+          duration: CallDuration ? parseInt(CallDuration) : undefined,
+          recordingUrl: RecordingUrl,
+        });
+      }
+
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Voice status webhook error:", error);
+      res.sendStatus(200);
+    }
+  });
+
+  // GET /api/communications - Get SMS and call logs
+  app.get("/api/communications", async (req, res) => {
+    try {
+      const smsMessages = await storage.getAllSmsMessages();
+      const callLogs = await storage.getAllCallLogs();
+      
+      res.json({ smsMessages, callLogs });
+    } catch (error) {
+      console.error("Get communications error:", error);
+      res.status(500).json({ error: "Failed to fetch communications" });
     }
   });
 

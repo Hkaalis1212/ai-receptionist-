@@ -20,7 +20,7 @@ Preferred communication style: Simple, everyday language.
 
 **State Management**: TanStack Query (React Query) handles server state with custom query client configuration. The application disables automatic refetching and sets infinite stale time for manual control over data freshness.
 
-**Routing**: Uses Wouter for client-side routing, providing a lightweight alternative to React Router with four main routes: Chat, Dashboard, Appointments, and Settings.
+**Routing**: Uses Wouter for client-side routing, providing a lightweight alternative to React Router with six main routes: Chat, Dashboard, Appointments, Communications, Checkout, and Settings.
 
 **Theming**: Custom theme system supporting light/dark modes with system preference detection, persisted to localStorage. Uses CSS custom properties for color tokens following HSL color space.
 
@@ -45,15 +45,20 @@ Preferred communication style: Simple, everyday language.
 **Schema Design**:
 - **Messages Table**: Stores conversation messages with role (user/assistant/system), content, timestamp, and conversation reference
 - **Conversations Table**: Tracks conversation metadata including status (active/completed/escalated), sentiment, intent classification, and customer contact information
-- **Appointments Table**: Manages booking data with service, date/time, status (pending/confirmed/cancelled/completed), and customer details
-- **Settings Table**: Stores business configuration including name, type, available services, working hours, timezone, welcome message, and escalation email
-- **Working Hours Table**: Defines daily business hours with day of week, opening/closing times, and closure status
+- **Appointments Table**: Manages booking data with service, date/time, status (pending/confirmed/cancelled/completed), customer details, payment amount (amountCents), payment status, and Stripe payment intent ID
+- **SMS Messages Table**: Logs all SMS communications with Twilio message SID, direction (inbound/outbound), from/to numbers, message body, status, and optional appointment/conversation links
+- **Call Logs Table**: Records voice call data including Twilio call SID, direction, from/to numbers, call status, duration, recording URL, transcript, and optional appointment/conversation links
+- **Settings Table**: Stores business configuration including name, type, business phone, available services, working hours, timezone, welcome message, and escalation email
 
 **Type Safety**: Full TypeScript integration with Zod schemas for runtime validation using `drizzle-zod` for automatic schema inference.
 
 ### External Dependencies
 
-**AI Service**: OpenAI API (GPT-5 model) for conversational AI, intent recognition, sentiment analysis, and entity extraction. Configured via `AI_INTEGRATIONS_OPENAI_BASE_URL` and `AI_INTEGRATIONS_OPENAI_API_KEY` environment variables.
+**AI Service**: OpenAI API (GPT-5 model) for conversational AI, intent recognition, sentiment analysis, and entity extraction. Configured via `AI_INTEGRATIONS_OPENAI_BASE_URL` and `AI_INTEGRATIONS_OPENAI_API_KEY` environment variables. Also powers voice call responses via Twilio integration.
+
+**Payment Processing**: Stripe integration for secure payment processing on appointments. Configured with `STRIPE_SECRET_KEY` and `VITE_STRIPE_PUBLIC_KEY`. Supports payment intents, checkout flows, and payment status tracking.
+
+**Communications**: Twilio integration for voice calls and SMS messaging via Replit connector. Provides automated SMS notifications for appointment confirmations and payment reminders. Voice calls are handled with AI-powered TwiML responses including speech recognition and natural language processing. Webhook signature validation ensures secure communication.
 
 **Database**: Neon Serverless PostgreSQL database accessed via `DATABASE_URL` environment variable. Uses connection pooling for efficient resource management.
 

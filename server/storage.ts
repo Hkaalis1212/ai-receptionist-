@@ -13,6 +13,10 @@ import {
   type InsertSettings,
   type SettingsWithWorkingHours,
   type Analytics,
+  type SmsMessage,
+  type InsertSmsMessage,
+  type CallLog,
+  type InsertCallLog,
 } from "@shared/schema";
 
 const client = neon(process.env.DATABASE_URL!);
@@ -47,6 +51,20 @@ export interface IStorage {
 
   // Analytics
   getAnalytics(): Promise<Analytics>;
+
+  // SMS Messages
+  createSmsMessage(sms: InsertSmsMessage): Promise<SmsMessage>;
+  getSmsMessage(id: string): Promise<SmsMessage | undefined>;
+  getSmsMessageBySid(sid: string): Promise<SmsMessage | undefined>;
+  getAllSmsMessages(): Promise<SmsMessage[]>;
+  updateSmsMessage(id: string, updates: Partial<SmsMessage>): Promise<SmsMessage | undefined>;
+
+  // Call Logs
+  createCallLog(call: InsertCallLog): Promise<CallLog>;
+  getCallLog(id: string): Promise<CallLog | undefined>;
+  getCallLogBySid(sid: string): Promise<CallLog | undefined>;
+  getAllCallLogs(): Promise<CallLog[]>;
+  updateCallLog(id: string, updates: Partial<CallLog>): Promise<CallLog | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -260,6 +278,94 @@ export class DatabaseStorage implements IStorage {
       sentimentBreakdown,
       intentBreakdown,
     };
+  }
+
+  // SMS Messages
+  async createSmsMessage(insertSms: InsertSmsMessage): Promise<SmsMessage> {
+    const [sms] = await db
+      .insert(schema.smsMessages)
+      .values(insertSms)
+      .returning();
+    return sms;
+  }
+
+  async getSmsMessage(id: string): Promise<SmsMessage | undefined> {
+    const [sms] = await db
+      .select()
+      .from(schema.smsMessages)
+      .where(eq(schema.smsMessages.id, id));
+    return sms;
+  }
+
+  async getSmsMessageBySid(sid: string): Promise<SmsMessage | undefined> {
+    const [sms] = await db
+      .select()
+      .from(schema.smsMessages)
+      .where(eq(schema.smsMessages.twilioMessageSid, sid));
+    return sms;
+  }
+
+  async getAllSmsMessages(): Promise<SmsMessage[]> {
+    return await db
+      .select()
+      .from(schema.smsMessages)
+      .orderBy(desc(schema.smsMessages.createdAt));
+  }
+
+  async updateSmsMessage(
+    id: string,
+    updates: Partial<SmsMessage>
+  ): Promise<SmsMessage | undefined> {
+    const [updated] = await db
+      .update(schema.smsMessages)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.smsMessages.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Call Logs
+  async createCallLog(insertCall: InsertCallLog): Promise<CallLog> {
+    const [call] = await db
+      .insert(schema.callLogs)
+      .values(insertCall)
+      .returning();
+    return call;
+  }
+
+  async getCallLog(id: string): Promise<CallLog | undefined> {
+    const [call] = await db
+      .select()
+      .from(schema.callLogs)
+      .where(eq(schema.callLogs.id, id));
+    return call;
+  }
+
+  async getCallLogBySid(sid: string): Promise<CallLog | undefined> {
+    const [call] = await db
+      .select()
+      .from(schema.callLogs)
+      .where(eq(schema.callLogs.twilioCallSid, sid));
+    return call;
+  }
+
+  async getAllCallLogs(): Promise<CallLog[]> {
+    return await db
+      .select()
+      .from(schema.callLogs)
+      .orderBy(desc(schema.callLogs.createdAt));
+  }
+
+  async updateCallLog(
+    id: string,
+    updates: Partial<CallLog>
+  ): Promise<CallLog | undefined> {
+    const [updated] = await db
+      .update(schema.callLogs)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.callLogs.id, id))
+      .returning();
+    return updated;
   }
 }
 

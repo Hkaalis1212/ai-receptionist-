@@ -10,6 +10,10 @@ export const sentimentEnum = pgEnum("sentiment", ["positive", "neutral", "negati
 export const intentEnum = pgEnum("intent", ["booking", "inquiry", "faq", "general", "unknown"]);
 export const appointmentStatusEnum = pgEnum("appointment_status", ["pending", "confirmed", "cancelled", "completed"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "failed", "refunded"]);
+export const smsDirectionEnum = pgEnum("sms_direction", ["inbound", "outbound"]);
+export const smsStatusEnum = pgEnum("sms_status", ["queued", "sent", "delivered", "failed", "received"]);
+export const callDirectionEnum = pgEnum("call_direction", ["inbound", "outbound"]);
+export const callStatusEnum = pgEnum("call_status", ["initiated", "ringing", "in-progress", "completed", "busy", "failed", "no-answer"]);
 
 // Messages table
 export const messages = pgTable("messages", {
@@ -161,6 +165,56 @@ export const chatResponseSchema = z.object({
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 export type ChatResponse = z.infer<typeof chatResponseSchema>;
+
+// SMS Messages table
+export const smsMessages = pgTable("sms_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  twilioMessageSid: text("twilio_message_sid").unique(),
+  direction: smsDirectionEnum("direction").notNull(),
+  from: text("from").notNull(),
+  to: text("to").notNull(),
+  body: text("body").notNull(),
+  status: smsStatusEnum("status").notNull().default("queued"),
+  conversationId: varchar("conversation_id"),
+  appointmentId: varchar("appointment_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSmsMessageSchema = createInsertSchema(smsMessages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SmsMessage = typeof smsMessages.$inferSelect;
+export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;
+
+// Call Logs table
+export const callLogs = pgTable("call_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  twilioCallSid: text("twilio_call_sid").unique(),
+  direction: callDirectionEnum("direction").notNull(),
+  from: text("from").notNull(),
+  to: text("to").notNull(),
+  status: callStatusEnum("status").notNull().default("initiated"),
+  duration: integer("duration"),
+  recordingUrl: text("recording_url"),
+  conversationId: varchar("conversation_id"),
+  appointmentId: varchar("appointment_id"),
+  transcript: text("transcript"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertCallLogSchema = createInsertSchema(callLogs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CallLog = typeof callLogs.$inferSelect;
+export type InsertCallLog = z.infer<typeof insertCallLogSchema>;
 
 // Helper type for settings with working hours object
 export type SettingsWithWorkingHours = Omit<Settings, 'workingHoursStart' | 'workingHoursEnd'> & {
