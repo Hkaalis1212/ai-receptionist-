@@ -7,6 +7,7 @@ import { ChatMessage } from "@/components/chat-message";
 import { TypingIndicator } from "@/components/typing-indicator";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
+import { type SettingsWithWorkingHours } from "@shared/schema";
 
 interface DisplayMessage {
   id: string;
@@ -19,15 +20,27 @@ interface DisplayMessage {
 export default function Chat() {
   const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<string | undefined>();
-  const [messages, setMessages] = useState<DisplayMessage[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: "Hello! I'm your AI Receptionist. I can help you with appointments, answer questions about our services, or connect you with the right person. How can I assist you today?",
-      timestamp: new Date().toISOString(),
-      conversationId: "initial",
-    },
-  ]);
+
+  const { data: settings } = useQuery<SettingsWithWorkingHours>({
+    queryKey: ["/api/settings"],
+  });
+
+  const getWelcomeMessage = () => {
+    if (!settings) {
+      return "Hello! I'm your AI Receptionist. I can help you with appointments, answer questions about our services, or connect you with the right person. How can I assist you today?";
+    }
+
+    let message = settings.welcomeMessage || 
+      `Hello! I'm your AI Receptionist. I can help you with appointments, answer questions about our services, or connect you with the right person. How can I assist you today?`;
+    
+    if (settings.businessPhone) {
+      message += `\n\nYou can also reach us at ${settings.businessPhone}.`;
+    }
+    
+    return message;
+  };
+
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -38,6 +51,31 @@ export default function Chat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (settings) {
+      setMessages(prev => {
+        // If welcome message already exists, update it
+        if (prev.length > 0 && prev[0].id === "welcome") {
+          return [{
+            ...prev[0],
+            content: getWelcomeMessage(),
+          }, ...prev.slice(1)];
+        }
+        // If no messages yet, add welcome message
+        if (prev.length === 0) {
+          return [{
+            id: "welcome",
+            role: "assistant" as const,
+            content: getWelcomeMessage(),
+            timestamp: new Date().toISOString(),
+            conversationId: "initial",
+          }];
+        }
+        return prev;
+      });
+    }
+  }, [settings]);
 
   const sendMessageMutation = useMutation({
     mutationFn: async (message: string) => {

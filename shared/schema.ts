@@ -77,6 +77,7 @@ export const settings = pgTable("settings", {
   id: varchar("id").primaryKey().default("default"),
   businessName: text("business_name").notNull(),
   businessType: text("business_type").notNull(),
+  businessPhone: text("business_phone"),
   availableServices: text("available_services").array().notNull(),
   workingHoursStart: text("working_hours_start").notNull(),
   workingHoursEnd: text("working_hours_end").notNull(),

@@ -158,6 +158,7 @@ export class DatabaseStorage implements IStorage {
           id: "default",
           businessName: "Your Business",
           businessType: "General",
+          businessPhone: "",
           availableServices: ["Consultation", "Service", "Support"],
           workingHoursStart: "09:00",
           workingHoursEnd: "17:00",

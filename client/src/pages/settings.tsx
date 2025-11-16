@@ -24,6 +24,7 @@ import { Loader2, Save } from "lucide-react";
 const settingsFormSchema = z.object({
   businessName: z.string().min(1, "Business name is required"),
   businessType: z.string().min(1, "Business type is required"),
+  businessPhone: z.string().optional(),
   availableServices: z.array(z.string()).min(1, "At least one service is required"),
   workingHours: z.object({
     start: z.string(),
@@ -45,9 +46,15 @@ export default function SettingsPage() {
 
   const form = useForm<SettingsForm>({
     resolver: zodResolver(settingsFormSchema),
-    values: settings || {
+    values: settings ? {
+      ...settings,
+      businessPhone: settings.businessPhone || "",
+      welcomeMessage: settings.welcomeMessage || "",
+      escalationEmail: settings.escalationEmail || "",
+    } : {
       businessName: "",
       businessType: "",
+      businessPhone: "",
       availableServices: [],
       workingHours: { start: "09:00", end: "17:00" },
       timezone: "UTC",
@@ -164,6 +171,27 @@ export default function SettingsPage() {
                         </FormControl>
                         <FormDescription>
                           This helps the AI provide more relevant responses
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="businessPhone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business Phone</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="tel"
+                            placeholder="+1 (555) 123-4567" 
+                            {...field}
+                            data-testid="input-business-phone"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Contact number for your business
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
