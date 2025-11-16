@@ -48,7 +48,9 @@ export async function getAIResponse(
     });
 
     const content = response.choices[0]?.message?.content || "{}";
+    console.log("AI Response content:", content);
     const parsed = JSON.parse(content);
+    console.log("AI Parsed response:", JSON.stringify(parsed, null, 2));
 
     return {
       message:
@@ -61,6 +63,9 @@ export async function getAIResponse(
     };
   } catch (error) {
     console.error("AI response error:", error);
+    if (error instanceof Error) {
+      console.error("Error details:", error.message, error.stack);
+    }
     return {
       message:
         "I apologize, but I'm experiencing technical difficulties. Please try again in a moment.",
