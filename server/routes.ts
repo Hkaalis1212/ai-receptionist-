@@ -734,6 +734,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const settings = await storage.getSettings();
 
+      // Personalized caller identification: Look up caller by phone number
+      let customerName: string | null = null;
+      let customerPriority: string = "standard";
+      let shouldEscalate = false;
+
+      // Check for existing customer by phone number
+      const existingConversations = await storage.getAllConversations();
+      const knownConversation = existingConversations.find(c => c.customerPhone === From);
+      if (knownConversation) {
+        customerName = knownConversation.customerName;
+        customerPriority = knownConversation.customerPriority || "standard";
+      } else {
+        // Check appointments
+        const appointments = await storage.getAllAppointments();
+        const knownAppointment = appointments.find(a => a.customerPhone === From);
+        if (knownAppointment) {
+          customerName = knownAppointment.customerName;
+          customerPriority = knownAppointment.customerPriority || "standard";
+        }
+      }
+
+      // Intelligent routing: Check business hours
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTime = currentHour * 60 + currentMinute;
+      
+      const [startHour, startMin] = settings.workingHoursStart.split(":").map(Number);
+      const [endHour, endMin] = settings.workingHoursEnd.split(":").map(Number);
+      const startTime = startHour * 60 + startMin;
+      const endTime = endHour * 60 + endMin;
+      
+      const isDuringBusinessHours = currentTime >= startTime && currentTime <= endTime;
+
+      // Escalate VIP or urgent customers, or calls outside business hours
+      if (customerPriority === "vip" || customerPriority === "urgent" || !isDuringBusinessHours) {
+        shouldEscalate = true;
+      }
+
       // Start call recording using Twilio REST API
       const twilioClient = getTwilioClient();
       if (twilioClient) {
@@ -747,12 +786,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const greeting = `Hello! You've reached ${settings.businessName}. We're an AI-powered receptionist. Please tell us how we can help you today.`;
+      // Build personalized greeting with privacy disclosure
+      let greeting = "";
+      
+      // Privacy disclosure (compliance requirement)
+      const disclosure = settings.recordingDisclosure || "This call may be recorded for quality and training purposes.";
+      greeting += disclosure + " ";
+
+      // Personalized greeting if caller is known
+      if (customerName) {
+        greeting += `Hello ${customerName}! Welcome back to ${settings.businessName}. `;
+        if (customerPriority === "vip") {
+          greeting += "As one of our valued VIP customers, we're giving you priority service. ";
+        }
+      } else {
+        greeting += `Hello! You've reached ${settings.businessName}. `;
+      }
+
+      // Custom call script or default message
+      if (settings.customCallScript) {
+        greeting += settings.customCallScript;
+      } else {
+        if (!isDuringBusinessHours) {
+          greeting += `We're currently outside our business hours of ${settings.workingHoursStart} to ${settings.workingHoursEnd}. However, our AI assistant is here to help. `;
+        }
+        greeting += "Please tell us how we can help you today.";
+      }
+
+      // Escalation routing
+      let routingAction = "/api/twilio/voice/gather";
+      if (shouldEscalate && settings.escalationEmail) {
+        // In a real system, this would trigger an alert to staff
+        console.log(`ESCALATION ALERT: ${customerPriority} customer ${customerName || "Unknown"} calling from ${From}`);
+      }
       
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Play>${req.protocol}://${req.get('host')}/api/twilio/tts?text=${encodeURIComponent(greeting)}&callSid=${CallSid}</Play>
-  <Gather input="speech" action="/api/twilio/voice/gather" method="POST" timeout="3" speechTimeout="auto">
+  <Gather input="speech" action="${routingAction}" method="POST" timeout="3" speechTimeout="auto">
     <Pause length="1"/>
   </Gather>
   <Play>${req.protocol}://${req.get('host')}/api/twilio/tts?text=${encodeURIComponent("We didn't receive your response. Please call back. Goodbye!")}</Play>

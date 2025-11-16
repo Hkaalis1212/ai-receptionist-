@@ -45,6 +45,7 @@ export const conversations = pgTable("conversations", {
   customerName: text("customer_name"),
   customerEmail: text("customer_email"),
   customerPhone: text("customer_phone"),
+  customerPriority: customerPriorityEnum("customer_priority").default("standard"),
   mailchimpMemberId: text("mailchimp_member_id"),
   mailchimpSyncedAt: timestamp("mailchimp_synced_at"),
 });
@@ -65,6 +66,7 @@ export const appointments = pgTable("appointments", {
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email"),
   customerPhone: text("customer_phone"),
+  customerPriority: customerPriorityEnum("customer_priority").default("standard"),
   service: text("service").notNull(),
   date: text("date").notNull(),
   time: text("time").notNull(),
@@ -106,6 +108,10 @@ export const settings = pgTable("settings", {
   welcomeMessage: text("welcome_message"),
   escalationEmail: text("escalation_email"),
   elevenLabsVoiceId: text("eleven_labs_voice_id"),
+  voiceLanguage: text("voice_language").default("en"),
+  customCallScript: text("custom_call_script"),
+  privacyPolicyUrl: text("privacy_policy_url"),
+  recordingDisclosure: text("recording_disclosure").default("This call may be recorded for quality and training purposes."),
   mailchimpAudienceId: text("mailchimp_audience_id"),
   mailchimpEnableSync: text("mailchimp_enable_sync").$type<"true" | "false">().default("false"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -245,6 +251,27 @@ export const insertKnowledgeBaseSchema = createInsertSchema(knowledgeBase).omit(
 
 export type KnowledgeBase = typeof knowledgeBase.$inferSelect;
 export type InsertKnowledgeBase = z.infer<typeof insertKnowledgeBaseSchema>;
+
+// Audit logs table for security and compliance tracking
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  action: text("action").notNull(),
+  resource: text("resource").notNull(),
+  resourceId: text("resource_id"),
+  userId: text("user_id"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  details: text("details"),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  timestamp: true,
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 
 // Helper type for settings with working hours object
 export type SettingsWithWorkingHours = Omit<Settings, 'workingHoursStart' | 'workingHoursEnd'> & {

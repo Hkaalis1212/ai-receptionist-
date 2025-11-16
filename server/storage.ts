@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import {
   type Message,
@@ -19,6 +19,8 @@ import {
   type InsertCallLog,
   type KnowledgeBase,
   type InsertKnowledgeBase,
+  type AuditLog,
+  type InsertAuditLog,
 } from "@shared/schema";
 
 const client = neon(process.env.DATABASE_URL!);
@@ -426,6 +428,43 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(schema.knowledgeBase)
       .where(eq(schema.knowledgeBase.id, id));
+  }
+
+  // Audit Logs
+  async createAuditLog(insertLog: InsertAuditLog): Promise<AuditLog> {
+    const [log] = await db
+      .insert(schema.auditLogs)
+      .values(insertLog)
+      .returning();
+    return log;
+  }
+
+  async getAllAuditLogs(limit: number = 100): Promise<AuditLog[]> {
+    return await db
+      .select()
+      .from(schema.auditLogs)
+      .orderBy(desc(schema.auditLogs.timestamp))
+      .limit(limit);
+  }
+
+  async getAuditLogsByResource(resource: string, resourceId?: string): Promise<AuditLog[]> {
+    if (resourceId) {
+      return await db
+        .select()
+        .from(schema.auditLogs)
+        .where(
+          and(
+            eq(schema.auditLogs.resource, resource),
+            eq(schema.auditLogs.resourceId, resourceId)
+          )
+        )
+        .orderBy(desc(schema.auditLogs.timestamp));
+    }
+    return await db
+      .select()
+      .from(schema.auditLogs)
+      .where(eq(schema.auditLogs.resource, resource))
+      .orderBy(desc(schema.auditLogs.timestamp));
   }
 }
 
