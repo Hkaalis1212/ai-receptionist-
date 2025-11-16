@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -9,6 +9,7 @@ export const conversationStatusEnum = pgEnum("conversation_status", ["active", "
 export const sentimentEnum = pgEnum("sentiment", ["positive", "neutral", "negative", "unknown"]);
 export const intentEnum = pgEnum("intent", ["booking", "inquiry", "faq", "general", "unknown"]);
 export const appointmentStatusEnum = pgEnum("appointment_status", ["pending", "confirmed", "cancelled", "completed"]);
+export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "failed", "refunded"]);
 
 // Messages table
 export const messages = pgTable("messages", {
@@ -60,6 +61,9 @@ export const appointments = pgTable("appointments", {
   date: text("date").notNull(),
   time: text("time").notNull(),
   status: appointmentStatusEnum("status").notNull().default("pending"),
+  amountCents: integer("amount_cents"),
+  paymentStatus: paymentStatusEnum("payment_status").default("pending"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
