@@ -41,6 +41,7 @@ import Checkout from "@/pages/checkout";
 import Communications from "@/pages/communications";
 import AdminDashboard from "@/pages/admin";
 import Team from "@/pages/team";
+import Billing from "@/pages/billing";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
@@ -204,6 +205,11 @@ function Router() {
       <Route path="/team">
         <ProtectedRoute allowedRoles={["admin"]}>
           <Team />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/billing">
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <Billing />
         </ProtectedRoute>
       </Route>
       <Route path="/admin">
