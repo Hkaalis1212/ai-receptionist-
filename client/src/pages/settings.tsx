@@ -1,0 +1,322 @@
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { type Settings, settingsSchema } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Loader2, Save } from "lucide-react";
+
+export default function SettingsPage() {
+  const { toast } = useToast();
+
+  const { data: settings, isLoading } = useQuery<Settings>({
+    queryKey: ["/api/settings"],
+  });
+
+  const form = useForm<Settings>({
+    resolver: zodResolver(settingsSchema),
+    values: settings || {
+      businessName: "",
+      businessType: "",
+      availableServices: [],
+      workingHours: { start: "09:00", end: "17:00" },
+      timezone: "UTC",
+      welcomeMessage: "",
+      escalationEmail: "",
+    },
+  });
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (data: Settings) => {
+      return await apiRequest("POST", "/api/settings", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      toast({
+        title: "Settings saved",
+        description: "Your settings have been updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: Settings) => {
+    updateSettingsMutation.mutate(data);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="border-b border-border bg-background px-6 py-4">
+          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Configure your AI Receptionist
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="max-w-3xl mx-auto space-y-6">
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4 w-64 mt-2" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="border-b border-border bg-background px-6 py-4">
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Configure your AI Receptionist
+        </p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="max-w-3xl mx-auto">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Business Information</CardTitle>
+                  <CardDescription>
+                    Basic details about your business
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="businessName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business Name</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Acme Inc." 
+                            {...field} 
+                            data-testid="input-business-name"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="businessType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business Type</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Salon, Clinic, Restaurant, etc." 
+                            {...field}
+                            data-testid="input-business-type"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          This helps the AI provide more relevant responses
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="availableServices"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Available Services</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Haircut, Massage, Consultation (comma-separated)" 
+                            value={field.value.join(", ")}
+                            onChange={(e) => field.onChange(e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
+                            data-testid="input-services"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Enter services separated by commas
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Working Hours</CardTitle>
+                  <CardDescription>
+                    Set your business operating hours
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="workingHours.start"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Start Time</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="time" 
+                              {...field}
+                              data-testid="input-start-time"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="workingHours.end"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>End Time</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="time" 
+                              {...field}
+                              data-testid="input-end-time"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="timezone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Timezone</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="America/New_York" 
+                            {...field}
+                            data-testid="input-timezone"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Customization</CardTitle>
+                  <CardDescription>
+                    Personalize your AI Receptionist's behavior
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="welcomeMessage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Welcome Message (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Leave blank to use the default welcome message"
+                            className="resize-none"
+                            rows={3}
+                            {...field}
+                            value={field.value || ""}
+                            data-testid="input-welcome-message"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="escalationEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Escalation Email (Optional)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="email"
+                            placeholder="support@example.com"
+                            {...field}
+                            value={field.value || ""}
+                            data-testid="input-escalation-email"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Where to send notifications for escalated conversations
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+
+              <div className="flex justify-end">
+                <Button 
+                  type="submit" 
+                  disabled={updateSettingsMutation.isPending}
+                  data-testid="button-save-settings"
+                >
+                  {updateSettingsMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Settings
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </div>
+      </div>
+    </div>
+  );
+}
