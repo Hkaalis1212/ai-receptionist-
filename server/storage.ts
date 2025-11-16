@@ -21,6 +21,8 @@ import {
   type InsertKnowledgeBase,
   type AuditLog,
   type InsertAuditLog,
+  type User,
+  type UpsertUser,
 } from "@shared/schema";
 
 const client = neon(process.env.DATABASE_URL!);
@@ -77,6 +79,12 @@ export interface IStorage {
   getActiveKnowledgeBase(): Promise<KnowledgeBase[]>;
   updateKnowledgeBase(id: string, updates: Partial<KnowledgeBase>): Promise<KnowledgeBase | undefined>;
   deleteKnowledgeBase(id: string): Promise<void>;
+
+  // Users (required for Replit Auth)
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  updateUserRole(id: string, role: "admin" | "staff" | "viewer"): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -487,6 +495,49 @@ export class DatabaseStorage implements IStorage {
       .from(schema.auditLogs)
       .where(eq(schema.auditLogs.resource, resource))
       .orderBy(desc(schema.auditLogs.timestamp));
+  }
+
+  // Users (required for Replit Auth)
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db
+      .insert(schema.users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: schema.users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db
+      .select()
+      .from(schema.users)
+      .orderBy(schema.users.createdAt);
+  }
+
+  async updateUserRole(
+    id: string,
+    role: "admin" | "staff" | "viewer"
+  ): Promise<User | undefined> {
+    const [user] = await db
+      .update(schema.users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(schema.users.id, id))
+      .returning();
+    return user;
   }
 }
 
