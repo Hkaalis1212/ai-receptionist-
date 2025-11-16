@@ -153,20 +153,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { appointmentId, amountCents } = req.body;
+      const { appointmentId } = req.body;
 
-      if (!appointmentId || !amountCents) {
-        return res.status(400).json({ error: "Missing appointmentId or amountCents" });
+      if (!appointmentId) {
+        return res.status(400).json({ error: "Missing appointmentId" });
       }
 
-      // Validate amount is a positive integer
-      if (!Number.isInteger(amountCents) || amountCents <= 0) {
-        return res.status(400).json({ error: "Amount must be a positive integer in cents" });
+      // Fetch appointment from database to get the authoritative amount
+      const appointment = await storage.getAppointment(appointmentId);
+
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
       }
 
-      // Create PaymentIntent with Stripe
+      // Validate appointment has an amount set
+      if (!appointment.amountCents || appointment.amountCents <= 0) {
+        return res.status(400).json({ 
+          error: "Appointment does not have a valid payment amount" 
+        });
+      }
+
+      // Create PaymentIntent with Stripe using the amount from the database
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: amountCents,
+        amount: appointment.amountCents,
         currency: "usd",
         metadata: {
           appointmentId,
@@ -176,10 +185,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update appointment with payment intent ID
       await storage.updateAppointment(appointmentId, {
         stripePaymentIntentId: paymentIntent.id,
-        amountCents,
       });
 
-      res.json({ clientSecret: paymentIntent.client_secret });
+      res.json({ 
+        clientSecret: paymentIntent.client_secret,
+        amount: appointment.amountCents 
+      });
     } catch (error: any) {
       console.error("Create payment intent error:", error);
       res.status(500).json({ 

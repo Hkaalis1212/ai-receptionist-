@@ -25,6 +25,7 @@ import Chat from "@/pages/chat";
 import Dashboard from "@/pages/dashboard";
 import Appointments from "@/pages/appointments";
 import SettingsPage from "@/pages/settings";
+import Checkout from "@/pages/checkout";
 import NotFound from "@/pages/not-found";
 
 const navigation = [
@@ -104,6 +105,7 @@ function Router() {
       <Route path="/" component={Chat} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/appointments" component={Appointments} />
+      <Route path="/checkout" component={Checkout} />
       <Route path="/settings" component={SettingsPage} />
       <Route component={NotFound} />
     </Switch>
