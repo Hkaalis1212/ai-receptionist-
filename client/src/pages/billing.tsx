@@ -14,8 +14,8 @@ import type { Subscription } from "@shared/schema";
 const PRICING_PLANS = [
   {
     name: "Starter",
-    price: 149,
-    yearlyPrice: 149 * 12 * 0.83, // 17% discount
+    price: 75,
+    yearlyPrice: 75 * 12 * 0.83, // 17% discount
     recommended: false,
     features: [
       "24/7 call answering (Twilio)",
@@ -29,8 +29,8 @@ const PRICING_PLANS = [
   },
   {
     name: "Professional",
-    price: 399,
-    yearlyPrice: 399 * 12 * 0.83, // 17% discount
+    price: 249,
+    yearlyPrice: 249 * 12 * 0.83, // 17% discount
     recommended: true,
     features: [
       "Everything in Starter, plus:",
@@ -45,8 +45,8 @@ const PRICING_PLANS = [
   },
   {
     name: "Premium",
-    price: 899,
-    yearlyPrice: 899 * 12 * 0.83, // 17% discount
+    price: 499,
+    yearlyPrice: 499 * 12 * 0.83, // 17% discount
     recommended: false,
     features: [
       "Everything in Professional, plus:",
@@ -61,8 +61,8 @@ const PRICING_PLANS = [
   },
   {
     name: "Enterprise",
-    price: 2000,
-    yearlyPrice: 2000 * 12 * 0.83, // 17% discount
+    price: 1749,
+    yearlyPrice: 1749 * 12 * 0.83, // 17% discount
     recommended: false,
     features: [
       "Everything in Premium, plus:",
