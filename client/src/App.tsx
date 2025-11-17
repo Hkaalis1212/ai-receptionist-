@@ -19,7 +19,7 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { MessageSquare, LayoutDashboard, Calendar, Settings, Bot, Phone, Shield, LogOut, User, Users } from "lucide-react";
+import { MessageSquare, LayoutDashboard, Calendar, Settings, Bot, Phone, Shield, LogOut, User, Users, CreditCard } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -74,6 +74,12 @@ const navigation = [
     title: "Team",
     url: "/team",
     icon: Users,
+    roles: ["admin"],
+  },
+  {
+    title: "Billing",
+    url: "/billing",
+    icon: CreditCard,
     roles: ["admin"],
   },
   {
