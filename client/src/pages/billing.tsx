@@ -182,8 +182,9 @@ export default function Billing() {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {PRICING_PLANS.map((plan) => {
             const monthlyPrice = plan.price;
-            const yearlyMonthlyPrice = Math.round(plan.yearlyPrice / 12);
-            const displayPrice = isYearly ? yearlyMonthlyPrice : monthlyPrice;
+            const yearlyPrice = Math.round(plan.yearlyPrice);
+            const monthlyEquivalent = Math.round(monthlyPrice * 0.83); // 17% discount
+            const displayPrice = isYearly ? yearlyPrice : monthlyPrice;
             const isCurrentPlan = currentPlan === plan.name.toLowerCase();
 
             return (
@@ -216,11 +217,13 @@ export default function Billing() {
                   <div className="space-y-2">
                     <div className="flex items-baseline gap-1">
                       <span className="text-4xl font-bold">${displayPrice}</span>
-                      <span className="text-muted-foreground">/mo</span>
+                      <span className="text-muted-foreground">
+                        {isYearly ? "/year" : "/mo"}
+                      </span>
                     </div>
                     {isYearly && (
                       <p className="text-sm text-muted-foreground">
-                        ${Math.round(plan.yearlyPrice)} billed annually
+                        ${monthlyEquivalent}/mo billed annually
                       </p>
                     )}
                   </div>

@@ -525,18 +525,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(schema.users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: schema.users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return user;
+    try {
+      // Normal upsert by ID
+      const [user] = await db
+        .insert(schema.users)
+        .values(userData)
+        .onConflictDoUpdate({
+          target: schema.users.id,
+          set: {
+            ...userData,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+      return user;
+    } catch (error: any) {
+      // Handle unique email constraint violation
+      if (error?.code === '23505' && error?.constraint === 'users_email_unique') {
+        // Log details server-side for debugging (not exposed to client)
+        console.warn(`Duplicate email detected for email: ${userData.email}, sub: ${userData.id}. This can happen when using the same email with different OIDC providers or in testing scenarios.`);
+        // Return generic error to prevent email enumeration
+        throw new Error('This account is already registered. Please sign in using your original authentication method.');
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async getAllUsers(): Promise<User[]> {
