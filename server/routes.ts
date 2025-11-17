@@ -227,9 +227,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json({ url: session.url });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating upgrade session:", error);
-      res.status(500).json({ message: "Failed to create checkout session" });
+      console.error("Stripe error details:", {
+        message: error.message,
+        type: error.type,
+        code: error.code,
+        param: error.param,
+      });
+      res.status(500).json({ 
+        message: "Failed to create checkout session",
+        error: error.message 
+      });
     }
   });
 
