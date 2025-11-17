@@ -19,6 +19,8 @@ export const customerPriorityEnum = pgEnum("customer_priority", ["standard", "vi
 export const userRoleEnum = pgEnum("user_role", ["admin", "staff", "viewer"]);
 export const invitationStatusEnum = pgEnum("invitation_status", ["pending", "accepted", "expired", "cancelled"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "cancelled", "past_due", "trialing"]);
+export const subscriptionPlanEnum = pgEnum("subscription_plan", ["free", "starter", "professional", "premium", "enterprise"]);
+export const billingCycleEnum = pgEnum("billing_cycle", ["monthly", "yearly"]);
 
 // Session storage table (required for Replit Auth)
 export const sessions = pgTable(
@@ -336,7 +338,8 @@ export type InsertInvitation = z.infer<typeof insertInvitationSchema>;
 export const subscriptions = pgTable("subscriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").notNull().unique().default("default"),
-  plan: text("plan").notNull().default("free"),
+  plan: subscriptionPlanEnum("plan").notNull().default("free"),
+  billingCycle: billingCycleEnum("billing_cycle").default("monthly"),
   status: subscriptionStatusEnum("status").notNull().default("trialing"),
   maxTeamMembers: integer("max_team_members").notNull().default(3),
   currentTeamMembers: integer("current_team_members").notNull().default(0),

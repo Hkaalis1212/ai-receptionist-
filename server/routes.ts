@@ -181,26 +181,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Stripe not configured" });
       }
 
-      const { seats } = req.body;
+      const { plan, billingCycle } = req.body;
       
-      if (!seats || seats < 1) {
-        return res.status(400).json({ message: "Invalid seat count" });
+      if (!plan || !['starter', 'professional', 'premium', 'enterprise'].includes(plan)) {
+        return res.status(400).json({ message: "Invalid plan" });
       }
 
-      const subscription = await storage.getSubscription();
-      const currentUsers = (await storage.getAllUsers()).length;
-      const totalSeats = 3 + seats; // Free tier (3) + paid seats
-
-      if (totalSeats < currentUsers) {
-        return res.status(400).json({ 
-          message: `You currently have ${currentUsers} team members. Cannot downgrade below this number.`
-        });
+      if (!billingCycle || !['monthly', 'yearly'].includes(billingCycle)) {
+        return res.status(400).json({ message: "Invalid billing cycle" });
       }
 
-      // Create or update Stripe subscription
-      // Price: $10/month per additional seat
-      const priceInCents = seats * 1000; // $10 per seat
+      // Define pricing for each plan
+      const planPricing = {
+        starter: { monthly: 149, yearly: 149 * 12 * 0.83, maxMembers: 3 },
+        professional: { monthly: 399, yearly: 399 * 12 * 0.83, maxMembers: 10 },
+        premium: { monthly: 899, yearly: 899 * 12 * 0.83, maxMembers: 50 },
+        enterprise: { monthly: 2000, yearly: 2000 * 12 * 0.83, maxMembers: -1 }, // -1 = unlimited
+      };
 
+      const selectedPlan = planPricing[plan as keyof typeof planPricing];
+      const priceInCents = Math.round((billingCycle === 'yearly' ? selectedPlan.yearly : selectedPlan.monthly) * 100);
+      const interval = billingCycle === 'yearly' ? 'year' : 'month';
+
+      // Create Stripe checkout session
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
@@ -209,22 +212,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             price_data: {
               currency: 'usd',
               product_data: {
-                name: 'Team Member Seats',
-                description: `${seats} additional team member${seats > 1 ? 's' : ''}`,
+                name: `AI Receptionist - ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`,
+                description: `${billingCycle === 'yearly' ? 'Annual' : 'Monthly'} subscription`,
               },
-              unit_amount: 1000, // $10 per seat
+              unit_amount: priceInCents,
               recurring: {
-                interval: 'month',
+                interval: interval as 'month' | 'year',
               },
             },
-            quantity: seats,
+            quantity: 1,
           },
         ],
         success_url: `${req.headers.origin}/billing?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${req.headers.origin}/billing`,
         metadata: {
           organizationId: 'default',
-          seats: seats.toString(),
+          plan: plan,
+          billingCycle: billingCycle,
+          maxTeamMembers: selectedPlan.maxMembers.toString(),
         },
       });
 
