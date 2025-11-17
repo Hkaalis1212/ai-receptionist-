@@ -23,7 +23,7 @@ The design follows system-based principles inspired by modern SaaS platforms, pr
 ### Technical Implementations
 *   **Multi-User Authentication & RBAC**: Replit Auth integration with Google, GitHub, and email/password providers. Three-tier role system (admin, staff, viewer) with server-side requireRole middleware and client-side ProtectedRoute guards. Session management via PostgreSQL with automatic user provisioning on first login.
 *   **Team Management & Invitations**: Admin-only interface for viewing all team members, managing role assignments, and sending email-based team invitations. Invitation system with secure tokens, expiry tracking, and role pre-assignment. Real-time role updates with optimistic UI updates and error handling.
-*   **Subscription & Billing System**: Paywall enforcement with Stripe integration for team member seat management. Free tier includes 3 team members; additional members cost $10/month each. Automated subscription tracking prevents adding team members beyond limits with upgrade prompts. Dedicated billing page for subscription overview and Stripe checkout upgrades.
+*   **Subscription & Billing System**: Professional 4-tier pricing structure with Stripe integration. Plans include Starter ($149/mo, 3 members), Professional ($399/mo, 10 members), Premium ($899/mo, 50 members), and Enterprise ($2000/mo, unlimited members). Supports monthly and yearly billing with 17% discount on annual subscriptions. Automated subscription tracking prevents adding team members beyond plan limits with upgrade prompts. Dedicated billing page displays pricing tiers, feature comparisons, and Stripe checkout for plan upgrades.
 *   **AI Integration**: OpenAI GPT-5 handles natural language understanding, sentiment, and entity extraction.
 *   **Voice Customization**: Supports 8 languages via ElevenLabs and custom call scripts.
 *   **Privacy & Compliance**: Implements call recording disclosure and personalized caller identification.
@@ -41,7 +41,7 @@ The design follows system-based principles inspired by modern SaaS platforms, pr
 ### Feature Specifications
 *   **Authentication**: Multi-provider login (Google, GitHub, email/password) with role-based access control (admin/staff/viewer).
 *   **Team Management**: Admin-only page for viewing all users, managing role assignments, and sending team invitations via email with role pre-assignment. Displays pending invitations with cancel capability.
-*   **Billing & Subscriptions**: Admin-only subscription management with paywall enforcement. Free tier (3 team members) and paid tier ($10/month per additional member). Stripe integration for checkout and billing management.
+*   **Billing & Subscriptions**: Admin-only subscription management with paywall enforcement. Four pricing tiers: Starter ($149/mo, 3 members), Professional ($399/mo, 10 members, recommended), Premium ($899/mo, 50 members), and Enterprise ($2000/mo, unlimited members). Monthly and yearly billing options with 17% discount on annual plans. Stripe integration for secure checkout and billing management. Billing page accessible via sidebar navigation for admin users.
 *   **Chat**: Real-time customer interaction via AI (accessible to all authenticated users).
 *   **Appointments**: Scheduling, rescheduling, and cancellation with multi-channel support and notifications (admin and staff access).
 *   **Communications**: SMS and call log management (admin and staff access).
