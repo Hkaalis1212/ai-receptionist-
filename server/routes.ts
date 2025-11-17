@@ -18,8 +18,10 @@ import { setupAuth, isAuthenticated, requireRole } from "./replitAuth";
 
 // Initialize Stripe - referenced from blueprint:javascript_stripe
 // Only initialize if the secret key is provided
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+// Sanitize the key to remove any whitespace or newlines
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY?.trim();
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, {
       apiVersion: "2025-10-29.clover",
     })
   : null;

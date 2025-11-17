@@ -53,13 +53,30 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
-  await storage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
-  });
+  // Check if this is the first user - if so, make them an admin
+  const existingUser = await storage.getUser(claims["sub"]);
+  if (!existingUser) {
+    const allUsers = await storage.getAllUsers();
+    const isFirstUser = allUsers.length === 0;
+    
+    await storage.upsertUser({
+      id: claims["sub"],
+      email: claims["email"],
+      firstName: claims["first_name"],
+      lastName: claims["last_name"],
+      profileImageUrl: claims["profile_image_url"],
+      role: isFirstUser ? "admin" : "staff",
+    });
+  } else {
+    // User exists, just update their info (not their role)
+    await storage.upsertUser({
+      id: claims["sub"],
+      email: claims["email"],
+      firstName: claims["first_name"],
+      lastName: claims["last_name"],
+      profileImageUrl: claims["profile_image_url"],
+    });
+  }
 }
 
 export async function setupAuth(app: Express) {
